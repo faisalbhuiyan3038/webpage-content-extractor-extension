@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webpage Content Extractor</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+
+<body>
+    <div class="popup-container">
+        <header class="popup-header">
+            <div class="logo"><img width="32" height="32" src="../icons/icon.png" alt="Logo"></div>
+            <h1>Content Extractor</h1>
+        </header>
+
+        <main class="popup-main">
+            <!-- Prompt Selector -->
+            <div class="form-group">
+                <label for="prompt-select">Prompt</label>
+                <select id="prompt-select" class="select-input">
+                    <option value="loading">Loading...</option>
+                </select>
+            </div>
+
+            <!-- Chatbot Selector -->
+            <div class="form-group">
+                <label for="chatbot-select">Chatbot</label>
+                <select id="chatbot-select" class="select-input">
+                    <option value="loading">Loading...</option>
+                </select>
+            </div>
+
+            <!-- Options -->
+            <div class="options-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" id="include-prompt" checked>
+                    <span class="checkmark"></span>
+                    <span>Include prompt with extracted text</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" id="open-chatbot" checked>
+                    <span class="checkmark"></span>
+                    <span>Open chatbot after copying</span>
+                </label>
+            </div>
+
+            <!-- Extract Button -->
+            <button id="extract-btn" class="extract-button">
+                <span class="btn-icon">🚀</span>
+                <span class="btn-text">Extract & Copy</span>
+            </button>
+
+            <!-- Status Message -->
+            <div id="status" class="status-message hidden"></div>
+        </main>
+
+        <footer class="popup-footer">
+            <button id="options-btn" class="footer-link">
+                <span>⚙️</span>
+                <span>Options</span>
+            </button>
+        </footer>
+    </div>
+
+    <script src="../shared/defaults.js"></script>
+    <script src="../shared/storage.js"></script>
+    <script src="popup.js"></script>
+</body>
+
+</html>
