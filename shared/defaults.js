@@ -1,5 +1,5 @@
 // Default Chatbots - preserved from userscript
-const DEFAULT_CHATBOTS = {
+export const DEFAULT_CHATBOTS = {
     'chatgpt': {
         id: 'chatgpt',
         name: 'ChatGPT',
@@ -39,7 +39,7 @@ const DEFAULT_CHATBOTS = {
 };
 
 // Default Prompts - preserved from userscript
-const DEFAULT_PROMPTS = [
+export const DEFAULT_PROMPTS = [
     {
         id: 'none',
         name: 'No Prompt (Raw Text Only)',
@@ -48,7 +48,7 @@ const DEFAULT_PROMPTS = [
     },
     {
         id: 'summary',
-        name: 'Summary - Short',
+        name: 'Bite-Sized Summary',
         content: `Please summarize the following text in under 100 words.
 Instructions
 1. The summary should be well formatted and easily scannable.
@@ -58,14 +58,14 @@ Instructions
     },
     {
         id: '5-10-points',
-        name: '5-10 Key Points - Short',
+        name: 'Key Point Extraction',
         content: `Please provide the 5-10 most important points from the text.
 Use bullet points and emojis to break up the text.`,
         isDefault: true
     },
     {
         id: 'key-points-summary',
-        name: 'Summary with Key Points & Takeaways - Detailed',
+        name: 'Full Detailed Summary',
         content: `Please provide a summary of the following content in its original tone:
 1. First, give a concise one-sentence summary that captures the core message/theme
 2. Then, share a breakdown of the main topics discussed. For each topic:
@@ -78,7 +78,7 @@ Use bullet points and emojis to break up the text.`,
     },
     {
         id: 'short-form',
-        name: 'Blinkist-Like Summary - Detailed',
+        name: 'Section-Wise Summary',
         content: `Summarize the following content how Blinkist would.
 Keep the tone of the content. Keep it conversational.
 Break the headers using relevant dynamic emojis.
@@ -92,7 +92,7 @@ Don't start the text with "Let me...", or "Here is the summary...". Just give th
 ];
 
 // Truncation Config - preserved from userscript
-const TRUNC_CONFIG = {
+export const TRUNC_CONFIG = {
     characterLimit: 20000,
     initialContentRatio: 0.4,
     chunkSize: 300,
@@ -100,14 +100,9 @@ const TRUNC_CONFIG = {
 };
 
 // Default Settings
-const DEFAULT_SETTINGS = {
+export const DEFAULT_SETTINGS = {
     selectedPromptId: 'summary',
     selectedChatbotId: 'chatgpt',
     includePrompt: true,
     openChatbot: true
 };
-
-// Export for use in other modules
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, TRUNC_CONFIG, DEFAULT_SETTINGS };
-}

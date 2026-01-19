@@ -1,4 +1,15 @@
 // Options Page JavaScript
+import {
+    DEFAULT_CHATBOTS,
+    DEFAULT_PROMPTS,
+    DEFAULT_SETTINGS,
+    getCustomPrompts,
+    saveCustomPrompts,
+    getCustomChatbots,
+    saveCustomChatbots,
+    exportData,
+    importData
+} from '../shared/storage.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // DOM Elements

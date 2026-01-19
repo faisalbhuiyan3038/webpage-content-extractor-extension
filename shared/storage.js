@@ -1,54 +1,55 @@
 // Storage utilities for the extension
+import { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS } from './defaults.js';
 
 // Get all chatbots (default + custom)
-async function getAllChatbots() {
+export async function getAllChatbots() {
     const result = await chrome.storage.sync.get(['customChatbots']);
     const custom = result.customChatbots || {};
     return { ...DEFAULT_CHATBOTS, ...custom };
 }
 
 // Get all prompts (default + custom)
-async function getAllPrompts() {
+export async function getAllPrompts() {
     const result = await chrome.storage.sync.get(['customPrompts']);
     const custom = result.customPrompts || [];
     return [...DEFAULT_PROMPTS, ...custom];
 }
 
 // Get settings
-async function getSettings() {
+export async function getSettings() {
     const result = await chrome.storage.sync.get(['settings']);
     return { ...DEFAULT_SETTINGS, ...(result.settings || {}) };
 }
 
 // Save settings
-async function saveSettings(settings) {
+export async function saveSettings(settings) {
     await chrome.storage.sync.set({ settings });
 }
 
 // Get custom chatbots only
-async function getCustomChatbots() {
+export async function getCustomChatbots() {
     const result = await chrome.storage.sync.get(['customChatbots']);
     return result.customChatbots || {};
 }
 
 // Save custom chatbots
-async function saveCustomChatbots(chatbots) {
+export async function saveCustomChatbots(chatbots) {
     await chrome.storage.sync.set({ customChatbots: chatbots });
 }
 
 // Get custom prompts only
-async function getCustomPrompts() {
+export async function getCustomPrompts() {
     const result = await chrome.storage.sync.get(['customPrompts']);
     return result.customPrompts || [];
 }
 
 // Save custom prompts
-async function saveCustomPrompts(prompts) {
+export async function saveCustomPrompts(prompts) {
     await chrome.storage.sync.set({ customPrompts: prompts });
 }
 
 // Export all data for backup
-async function exportData() {
+export async function exportData() {
     const result = await chrome.storage.sync.get(null);
     return {
         version: '1.0.0',
@@ -60,7 +61,7 @@ async function exportData() {
 }
 
 // Import data from backup
-async function importData(data) {
+export async function importData(data) {
     if (!data || !data.version) {
         throw new Error('Invalid import data format');
     }
@@ -75,7 +76,7 @@ async function importData(data) {
 }
 
 // Initialize defaults on first install
-async function initializeDefaults() {
+export async function initializeDefaults() {
     const result = await chrome.storage.sync.get(['initialized']);
     if (!result.initialized) {
         await chrome.storage.sync.set({
@@ -86,3 +87,6 @@ async function initializeDefaults() {
         });
     }
 }
+
+// Re-export defaults for use in options page
+export { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS };

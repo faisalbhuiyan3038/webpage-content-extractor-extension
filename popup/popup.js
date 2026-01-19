@@ -1,4 +1,5 @@
 // Popup JavaScript - Main UI Logic
+import { getAllPrompts, getAllChatbots, getSettings, saveSettings } from '../shared/storage.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // DOM Elements
@@ -134,14 +135,24 @@ document.addEventListener('DOMContentLoaded', async () => {
                 throw new Error('Cannot extract from browser pages');
             }
 
-            // Inject content script
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ['content/extractor.js']
-            });
+            // Detect if Firefox (uses pre-registered content scripts) or Chrome (needs dynamic injection)
+            const isFirefox = navigator.userAgent.includes('Firefox');
 
-            // Wait a moment for script to initialize
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // For Chrome, inject content script dynamically
+            // For Firefox, content script is already registered in manifest
+            if (!isFirefox) {
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        files: ['content/extractor.js']
+                    });
+                    // Wait a moment for script to initialize
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                } catch (injectionError) {
+                    console.log('Script injection skipped or failed:', injectionError.message);
+                    // Continue anyway - script might already be injected
+                }
+            }
 
             // Send extraction request
             const response = await chrome.tabs.sendMessage(tab.id, {
