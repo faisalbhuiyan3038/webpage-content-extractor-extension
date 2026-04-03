@@ -10,7 +10,8 @@ chrome.runtime.onInstalled.addListener(async (details) => {
                 selectedPromptId: 'summary',
                 selectedChatbotId: 'chatgpt',
                 includePrompt: true,
-                openChatbot: true
+                openChatbot: true,
+                extractionAlgorithm: 1
             },
             customChatbots: {},
             customPrompts: []
@@ -32,7 +33,8 @@ chrome.commands.onCommand.addListener(async (command) => {
             selectedPromptId: 'summary',
             selectedChatbotId: 'chatgpt',
             includePrompt: true,
-            openChatbot: true
+            openChatbot: true,
+            extractionAlgorithm: 1
         };
 
         // Get prompts
@@ -67,7 +69,8 @@ chrome.commands.onCommand.addListener(async (command) => {
             const response = await chrome.tabs.sendMessage(tab.id, {
                 action: 'extractContent',
                 characterLimit: chatbot.characterLimit || 20000,
-                promptLength: includePrompt ? prompt.content.length : 0
+                promptLength: includePrompt ? prompt.content.length : 0,
+                algorithm: settings.extractionAlgorithm || 1
             });
 
             if (response && response.success) {

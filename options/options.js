@@ -3,6 +3,9 @@ import {
     DEFAULT_CHATBOTS,
     DEFAULT_PROMPTS,
     DEFAULT_SETTINGS,
+    ALGORITHMS,
+    getSettings,
+    saveSettings,
     getCustomPrompts,
     saveCustomPrompts,
     getCustomChatbots,
@@ -15,6 +18,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // DOM Elements
     const tabBtns = document.querySelectorAll('.tab-btn');
     const tabContents = document.querySelectorAll('.tab-content');
+
+    // General
+    const defaultAlgorithmSelect = document.getElementById('default-algorithm-select');
 
     // Prompts
     const addPromptBtn = document.getElementById('add-prompt-btn');
@@ -88,10 +94,33 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Load all data and render
     async function loadAllData() {
+        const settings = await getSettings();
+        renderAlgorithms(settings.extractionAlgorithm || 1);
         await renderDefaultPrompts();
         await renderCustomPrompts();
         await renderDefaultChatbots();
         await renderCustomChatbots();
+    }
+
+    // Render Algorithms
+    function renderAlgorithms(selectedAlgoId) {
+        defaultAlgorithmSelect.innerHTML = '';
+        Object.values(ALGORITHMS).forEach(algo => {
+            const option = document.createElement('option');
+            option.value = algo.id;
+            option.textContent = algo.name;
+            if (algo.id == selectedAlgoId) {
+                option.selected = true;
+            }
+            defaultAlgorithmSelect.appendChild(option);
+        });
+        
+        defaultAlgorithmSelect.addEventListener('change', async () => {
+            const settings = await getSettings();
+            settings.extractionAlgorithm = parseInt(defaultAlgorithmSelect.value);
+            await saveSettings(settings);
+            showToast('Default algorithm saved', 'success');
+        });
     }
 
     // Render default prompts

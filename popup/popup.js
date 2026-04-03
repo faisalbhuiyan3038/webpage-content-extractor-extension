@@ -1,10 +1,13 @@
 // Popup JavaScript - Main UI Logic
-import { getAllPrompts, getAllChatbots, getSettings, saveSettings } from '../shared/storage.js';
+import { getAllPrompts, getAllChatbots, getSettings, saveSettings, ALGORITHMS } from '../shared/storage.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
     // DOM Elements
     const promptSelect = document.getElementById('prompt-select');
     const chatbotSelect = document.getElementById('chatbot-select');
+    const algorithmSelect = document.getElementById('algorithm-select');
+    const tabsGroup = document.getElementById('tabs-group');
+    const tabsList = document.getElementById('tabs-list');
     const includePromptCheckbox = document.getElementById('include-prompt');
     const openChatbotCheckbox = document.getElementById('open-chatbot');
     const extractBtn = document.getElementById('extract-btn');
@@ -56,6 +59,50 @@ document.addEventListener('DOMContentLoaded', async () => {
                 chatbotSelect.appendChild(option);
             });
 
+            // Populate algorithm dropdown
+            algorithmSelect.innerHTML = '<option value="default">Default Setting</option>';
+            Object.values(ALGORITHMS).forEach(algo => {
+                const option = document.createElement('option');
+                option.value = algo.id;
+                option.textContent = algo.name;
+                algorithmSelect.appendChild(option);
+            });
+
+            // Populate other tabs list
+            const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const allTabs = await chrome.tabs.query({ currentWindow: true });
+            const otherTabs = allTabs.filter(t => t.id !== currentTab.id && t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('about:') && !t.url.startsWith('moz-extension://'));
+            
+            if (otherTabs.length > 0) {
+                tabsGroup.style.display = 'block';
+                tabsList.innerHTML = '';
+                otherTabs.forEach(t => {
+                    const label = document.createElement('label');
+                    label.style.display = 'flex';
+                    label.style.alignItems = 'center';
+                    label.style.marginBottom = '4px';
+                    label.style.cursor = 'pointer';
+                    
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    cb.value = t.id;
+                    cb.style.marginRight = '8px';
+                    
+                    const title = document.createElement('span');
+                    title.textContent = t.title ? (t.title.length > 40 ? t.title.substring(0, 40) + '...' : t.title) : 'Untitled Tab';
+                    title.style.fontSize = '12px';
+                    title.style.whiteSpace = 'nowrap';
+                    title.style.overflow = 'hidden';
+                    title.style.textOverflow = 'ellipsis';
+                    
+                    label.appendChild(cb);
+                    label.appendChild(title);
+                    tabsList.appendChild(label);
+                });
+            } else {
+                tabsList.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); padding: 5px;">No other extractable tabs.</div>';
+            }
+
             // Set checkbox states
             includePromptCheckbox.checked = settings.includePrompt !== false;
             openChatbotCheckbox.checked = settings.openChatbot !== false;
@@ -104,13 +151,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const selectedChatbotId = chatbotSelect.value;
         const includePrompt = includePromptCheckbox.checked && selectedPromptId !== 'none';
         const openChatbot = openChatbotCheckbox.checked;
+        const selectedAlgorithm = algorithmSelect.value;
+
+        // Get selected tabs
+        const selectedTabIds = Array.from(tabsList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
 
         // Get prompt and chatbot details
         const allPrompts = await getAllPrompts();
         const allChatbots = await getAllChatbots();
+        const settings = await getSettings();
 
         const prompt = allPrompts.find(p => p.id === selectedPromptId);
         const chatbot = allChatbots[selectedChatbotId];
+        const algoToUse = selectedAlgorithm === 'default' ? (settings.extractionAlgorithm || 1) : parseInt(selectedAlgorithm);
 
         if (!chatbot) {
             showStatus('Please select a valid chatbot', 'error');
@@ -123,53 +176,85 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         try {
             // Get active tab
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-            if (!tab) {
+            if (!activeTab) {
                 throw new Error('No active tab found');
             }
-
-            // Check if we can inject into this tab
-            if (tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') ||
-                tab.url.startsWith('about:') || tab.url.startsWith('moz-extension://')) {
-                throw new Error('Cannot extract from browser pages');
+            
+            // Build tab list to extract
+            const tabsToExtract = [activeTab];
+            if (selectedTabIds.length > 0) {
+                const allWinTabs = await chrome.tabs.query({ currentWindow: true });
+                selectedTabIds.forEach(id => {
+                    const t = allWinTabs.find(tab => tab.id === id);
+                    if (t) tabsToExtract.push(t);
+                });
             }
 
             // Detect if Firefox (uses pre-registered content scripts) or Chrome (needs dynamic injection)
             const isFirefox = navigator.userAgent.includes('Firefox');
 
-            // For Chrome, inject content script dynamically
-            // For Firefox, content script is already registered in manifest
-            if (!isFirefox) {
+            let allContents = [];
+
+            for (const tab of tabsToExtract) {
+                // Check if we can inject into this tab
+                if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') ||
+                    tab.url.startsWith('about:') || tab.url.startsWith('moz-extension://')) {
+                    console.log(`Skipping tab ${tab.url || 'unknown'} - unextractable`);
+                    continue;
+                }
+
+                if (!isFirefox) {
+                    try {
+                        await chrome.scripting.executeScript({
+                            target: { tabId: tab.id },
+                            files: ['content/extractor.js']
+                        });
+                        await new Promise(resolve => setTimeout(resolve, 100)); // wait for script init
+                    } catch (injectionError) {
+                        console.log(`Script injection skipped or failed for tab ${tab.id}:`, injectionError.message);
+                    }
+                }
+
                 try {
-                    await chrome.scripting.executeScript({
-                        target: { tabId: tab.id },
-                        files: ['content/extractor.js']
+                    const response = await chrome.tabs.sendMessage(tab.id, {
+                        action: 'extractContent',
+                        characterLimit: chatbot.characterLimit || 20000,
+                        promptLength: includePrompt && prompt ? prompt.content.length : 0,
+                        algorithm: algoToUse
                     });
-                    // Wait a moment for script to initialize
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                } catch (injectionError) {
-                    console.log('Script injection skipped or failed:', injectionError.message);
-                    // Continue anyway - script might already be injected
+
+                    if (response && response.success) {
+                        const tabTitle = tab.title || 'Untitled Tab';
+                        // Prepend tab title if multiple tabs
+                        let tabText = response.content;
+                        if (tabsToExtract.length > 1) {
+                            tabText = `=== Webpage: ${tabTitle} ===\nURL: ${tab.url}\n\n${tabText}\n`;
+                        }
+                        allContents.push(tabText);
+                    } else {
+                        console.log(`Extraction failed for tab ${tab.id}:`, response?.error);
+                    }
+                } catch (err) {
+                    console.log(`Failed to message tab ${tab.id}:`, err.message);
                 }
             }
-
-            // Send extraction request
-            const response = await chrome.tabs.sendMessage(tab.id, {
-                action: 'extractContent',
-                characterLimit: chatbot.characterLimit || 20000,
-                promptLength: includePrompt && prompt ? prompt.content.length : 0
-            });
-
-            if (!response || !response.success) {
-                throw new Error(response?.error || 'Extraction failed');
+            
+            if (allContents.length === 0) {
+                throw new Error('Failed to extract any content.');
             }
 
             // Build final text
-            let finalText = response.content;
+            let finalText = allContents.join('\n\n');
 
             if (includePrompt && prompt && prompt.content) {
-                finalText = `${prompt.content}\n\n---\n\nPage Content:\n${response.content}`;
+                finalText = `${prompt.content}\n\n---\n\n${tabsToExtract.length > 1 ? 'Combined Page Contents:' : 'Page Content:'}\n${finalText}`;
+            }
+            
+            // Re-apply truncation to final combo just in case it breaks limits
+            if (finalText.length > (chatbot.characterLimit || 20000)) {
+                finalText = finalText.substring(0, (chatbot.characterLimit || 20000) - 100) + '\n...[Text Truncated]';
             }
 
             // Copy to clipboard

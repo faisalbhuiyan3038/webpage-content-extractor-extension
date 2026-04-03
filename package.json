@@ -13,6 +13,11 @@
     "esbuild": "^0.27.2",
     "fs-extra": "^11.3.3",
     "html-minifier-terser": "^7.2.0",
-    "terser": "^5.44.1"
+    "terser": "^5.44.1",
+    "typescript": "^6.0.2"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "html-to-text": "^9.0.5"
   }
 }

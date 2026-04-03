@@ -1,5 +1,5 @@
 // Storage utilities for the extension
-import { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS } from './defaults.js';
+import { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS, ALGORITHMS } from './defaults.js';
 
 // Get all chatbots (default + custom)
 export async function getAllChatbots() {
@@ -89,4 +89,4 @@ export async function initializeDefaults() {
 }
 
 // Re-export defaults for use in options page
-export { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS };
+export { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS, ALGORITHMS };

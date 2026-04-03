@@ -12,13 +12,13 @@ console.log(`🎯 Building for: ${targetBrowser.toUpperCase()}\n`);
 // JS files to BUNDLE (these import from shared modules)
 const bundledJsFiles = [
     'popup/popup.js',
-    'options/options.js'
+    'options/options.js',
+    'content/extractor.ts'
 ];
 
 // JS files to minify without bundling (standalone scripts)
 const standaloneJsFiles = [
-    'background.js',
-    'content/extractor.js'
+    'background.js'
 ];
 
 // CSS files to minify
@@ -50,7 +50,7 @@ async function build() {
         if (fs.existsSync(file)) {
             await esbuild.build({
                 entryPoints: [file],
-                outfile: path.join(DIST_DIR, file),
+                outfile: path.join(DIST_DIR, file.replace(/\.ts$/, '.js')),
                 bundle: true,  // Bundle imports together
                 minify: true,
                 minifyWhitespace: true,

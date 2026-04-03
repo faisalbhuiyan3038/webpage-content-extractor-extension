@@ -7,7 +7,9 @@
         "activeTab",
         "clipboardWrite",
         "storage",
-        "scripting"
+        "scripting",
+        "tabs",
+        "<all_urls>"
     ],
     "action": {
         "default_popup": "popup/popup.html",
