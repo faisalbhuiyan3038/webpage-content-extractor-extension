@@ -34,8 +34,12 @@
             "matches": [
                 "<all_urls>"
             ],
+            "css": [
+                "content/sidebar.css"
+            ],
             "js": [
-                "content/extractor.js"
+                "content/extractor.js",
+                "content/sidebar.js"
             ],
             "run_at": "document_idle"
         }

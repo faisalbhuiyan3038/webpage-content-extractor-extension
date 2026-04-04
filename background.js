@@ -119,6 +119,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'openOptions') {
         chrome.runtime.openOptionsPage();
         sendResponse({ success: true });
+    } else if (request.action === 'openChatbotTab') {
+        chrome.tabs.create({ url: request.url });
+        sendResponse({ success: true });
+    } else if (request.action === 'updateRecentChatbots') {
+        chrome.storage.sync.get(['recentChatbots']).then(result => {
+            let recents = result.recentChatbots || [];
+            recents = recents.filter(id => id !== request.chatbotId);
+            recents.unshift(request.chatbotId);
+            if (recents.length > 3) recents = recents.slice(0, 3);
+            chrome.storage.sync.set({ recentChatbots: recents }).then(() => {
+                sendResponse({ success: true, recentChatbots: recents });
+            });
+        });
+        return true;
+    } else if (request.action === 'getSidebarData') {
+        chrome.storage.sync.get(['settings', 'customChatbots', 'preferredChatbots', 'recentChatbots']).then(result => {
+            const DEFAULT_SETTINGS = { sidebarEnabled: true, sidebarPosition: 'right' };
+            const DEFAULT_CHATBOTS = {
+                'chatgpt': { id: 'chatgpt', name: 'ChatGPT', url: 'https://chatgpt.com', characterLimit: 40000 },
+                'claude': { id: 'claude', name: 'Claude', url: 'https://claude.ai/new', characterLimit: 50000 },
+                'gemini': { id: 'gemini', name: 'Gemini', url: 'https://gemini.google.com/app', characterLimit: 32000 },
+                'grok': { id: 'grok', name: 'Grok', url: 'https://grok.com', characterLimit: 100000 },
+                'deepseek': { id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com', characterLimit: 200000 },
+                'gemini_studio': { id: 'gemini_studio', name: 'Gemini AI Studio', url: 'https://aistudio.google.com/prompts/new_chat', characterLimit: 100000 }
+            };
+            const DEFAULT_PREFERRED = ['chatgpt', 'claude', 'gemini'];
+            
+            const settings = { ...DEFAULT_SETTINGS, ...(result.settings || {}) };
+            const chatbots = { ...DEFAULT_CHATBOTS, ...(result.customChatbots || {}) };
+            const preferredChatbots = result.preferredChatbots || DEFAULT_PREFERRED;
+            const recentChatbots = result.recentChatbots || [];
+            
+            sendResponse({ settings, chatbots, preferredChatbots, recentChatbots });
+        });
+        return true;
+    } else if (request.action === 'addChatbot') {
+        chrome.storage.sync.get(['customChatbots']).then(result => {
+            const custom = result.customChatbots || {};
+            custom[request.chatbot.id] = request.chatbot;
+            chrome.storage.sync.set({ customChatbots: custom }).then(() => {
+                sendResponse({ success: true });
+            });
+        });
+        return true;
     }
     return true;
 });

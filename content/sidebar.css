@@ -1,0 +1,458 @@
+/* Webpage Content Extractor - Floating AI Sidebar CSS */
+
+#wce-ai-sidebar-container {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2147483647; /* Max z-index to stay on top */
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    display: flex;
+    align-items: center;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    pointer-events: none; /* Let clicks pass through container */
+}
+
+/* Position Left */
+#wce-ai-sidebar-container.wce-left {
+    left: 0;
+    flex-direction: row;
+}
+
+#wce-ai-sidebar-container.wce-left.wce-hidden {
+    transform: translate(-100%, -50%);
+    opacity: 0;
+}
+
+/* Position Right */
+#wce-ai-sidebar-container.wce-right {
+    right: 0;
+    flex-direction: row-reverse;
+}
+
+#wce-ai-sidebar-container.wce-right.wce-hidden {
+    transform: translate(100%, -50%);
+    opacity: 0;
+}
+
+/* Handle Button (Sticks to the edge) */
+#wce-handle-btn {
+    pointer-events: auto;
+    width: 24px;
+    height: 48px;
+    background: rgba(0, 0, 0, 0.15); /* highly translucent */
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: background 0.2s, width 0.2s;
+    user-select: none;
+}
+
+#wce-handle-btn:hover {
+    background: rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+    #wce-handle-btn {
+        background: rgba(255, 255, 255, 0.15);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    #wce-handle-btn:hover {
+        background: rgba(255, 255, 255, 0.25);
+    }
+}
+
+#wce-ai-sidebar-container.wce-left #wce-handle-btn {
+    border-radius: 0 8px 8px 0;
+    border-left: none;
+}
+
+#wce-ai-sidebar-container.wce-right #wce-handle-btn {
+    border-radius: 8px 0 0 8px;
+    border-right: none;
+}
+
+#wce-handle-btn svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+    color: #555;
+    transition: transform 0.3s;
+}
+
+@media (prefers-color-scheme: dark) {
+    #wce-handle-btn svg {
+        color: #ccc;
+    }
+}
+
+/* Open State */
+#wce-ai-sidebar-container.wce-open #wce-handle-btn svg {
+    transform: rotate(180deg);
+}
+
+/* Main Panel */
+#wce-sidebar-panel {
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition: max-width 0.3s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s, transform 0.3s;
+}
+
+@media (prefers-color-scheme: dark) {
+    #wce-sidebar-panel {
+        background: rgba(30, 30, 30, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+}
+
+#wce-ai-sidebar-container.wce-left #wce-sidebar-panel {
+    border-radius: 0 12px 12px 0;
+    border-left: none;
+    transform-origin: left center;
+}
+
+#wce-ai-sidebar-container.wce-right #wce-sidebar-panel {
+    border-radius: 12px 0 0 12px;
+    border-right: none;
+    transform-origin: right center;
+}
+
+/* Panel Open State */
+#wce-ai-sidebar-container.wce-open #wce-sidebar-panel {
+    opacity: 1;
+    max-width: 250px;
+}
+
+/* Icons */
+.wce-bot-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: transform 0.2s, background 0.2s;
+    flex-shrink: 0;
+}
+
+.wce-bot-btn.wce-show-name {
+    width: auto;
+    padding: 0 8px;
+    gap: 8px;
+    justify-content: flex-start;
+}
+
+.wce-bot-btn span.wce-bot-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+}
+
+.wce-bot-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    transform: scale(1.05);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-bot-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    .wce-bot-btn span.wce-bot-name {
+        color: #eee;
+    }
+}
+
+.wce-bot-btn img {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+    opacity: 0.85; /* Translucent icons */
+    transition: opacity 0.2s;
+}
+
+.wce-bot-btn:hover img {
+    opacity: 1;
+}
+
+.wce-divider {
+    height: 1px;
+    width: 24px;
+    margin: 4px auto;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-divider {
+        background: rgba(255, 255, 255, 0.1);
+    }
+}
+
+/* More Button */
+#wce-more-btn {
+    font-size: 18px;
+    color: #666;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#wce-more-btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+    #wce-more-btn {
+        color: #aaa;
+    }
+    #wce-more-btn:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: #eee;
+    }
+}
+
+/* Sliding Submenu */
+#wce-submenu {
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    width: 240px;
+    max-height: 70vh;
+    border-radius: 12px;
+    overflow: hidden;
+    position: absolute;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity 0.2s, transform 0.2s;
+}
+
+#wce-ai-sidebar-container.wce-left #wce-submenu {
+    left: calc(100% + 8px);
+    transform-origin: left center;
+}
+
+#wce-ai-sidebar-container.wce-right #wce-submenu {
+    right: calc(100% + 8px);
+    transform-origin: right center;
+}
+
+#wce-submenu.wce-show {
+    opacity: 1;
+    pointer-events: auto;
+    transform: scale(1);
+}
+
+@media (prefers-color-scheme: dark) {
+    #wce-submenu {
+        background: rgba(30, 30, 30, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+}
+
+.wce-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-modal-header {
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+}
+
+.wce-modal-header h3 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.wce-modal-close {
+    background: none;
+    border: none;
+    font-size: 20px;
+    cursor: pointer;
+    color: #888;
+}
+
+.wce-modal-close:hover {
+    color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-modal-close {
+        color: #aaa;
+    }
+    .wce-modal-close:hover {
+        color: #eee;
+    }
+}
+
+.wce-modal-body {
+    padding: 8px 0;
+    overflow-y: auto;
+}
+
+.wce-modal-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    width: 100%;
+    text-align: left;
+    color: inherit;
+    font-size: 14px;
+    transition: background 0.2s;
+}
+
+.wce-modal-item:hover {
+    background: rgba(0,0,0,0.05);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-modal-item:hover {
+        background: rgba(255,255,255,0.05);
+    }
+}
+
+.wce-modal-item img {
+    width: 20px;
+    height: 20px;
+    border-radius: 4px;
+}
+
+.wce-modal-footer {
+    padding: 12px 16px;
+    border-top: 1px solid rgba(0,0,0,0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(0,0,0,0.02);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-modal-footer {
+        border-top: 1px solid rgba(255,255,255,0.1);
+        background: #252525;
+    }
+}
+
+.wce-quick-add {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 16px;
+    border-top: 1px solid rgba(0,0,0,0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-quick-add {
+        border-top: 1px solid rgba(255,255,255,0.1);
+    }
+}
+
+.wce-qa-action-btn {
+    padding: 8px 12px;
+    background: rgba(0, 122, 255, 0.1);
+    color: #007aff;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+    text-align: center;
+    transition: background 0.2s;
+}
+
+.wce-qa-action-btn:hover {
+    background: rgba(0, 122, 255, 0.15);
+}
+
+.wce-qa-form {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.wce-qa-form.wce-show {
+    display: flex;
+}
+
+.wce-quick-add input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 13px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #333;
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-quick-add input {
+        background: #333;
+        border-color: #555;
+        color: #eee;
+    }
+}
+
+.wce-quick-add button {
+    padding: 6px 12px;
+    background: #007aff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 13px;
+}
+
+.wce-quick-add button:hover {
+    background: #0056b3;
+}
+
+.wce-text-sm {
+    font-size: 12px;
+    color: #777;
+    margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+    .wce-text-sm {
+        color: #999;
+    }
+}

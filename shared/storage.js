@@ -1,5 +1,5 @@
 // Storage utilities for the extension
-import { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS, ALGORITHMS } from './defaults.js';
+import { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS, ALGORITHMS, DEFAULT_PREFERRED_CHATBOTS } from './defaults.js';
 
 // Get all chatbots (default + custom)
 export async function getAllChatbots() {
@@ -48,6 +48,28 @@ export async function saveCustomPrompts(prompts) {
     await chrome.storage.sync.set({ customPrompts: prompts });
 }
 
+// Get preferred chatbots
+export async function getPreferredChatbots() {
+    const result = await chrome.storage.sync.get(['preferredChatbots']);
+    return result.preferredChatbots || DEFAULT_PREFERRED_CHATBOTS;
+}
+
+// Save preferred chatbots
+export async function savePreferredChatbots(chatbots) {
+    await chrome.storage.sync.set({ preferredChatbots: chatbots });
+}
+
+// Get recent chatbots
+export async function getRecentChatbots() {
+    const result = await chrome.storage.sync.get(['recentChatbots']);
+    return result.recentChatbots || [];
+}
+
+// Save recent chatbots
+export async function saveRecentChatbots(chatbots) {
+    await chrome.storage.sync.set({ recentChatbots: chatbots });
+}
+
 // Export all data for backup
 export async function exportData() {
     const result = await chrome.storage.sync.get(null);
@@ -89,4 +111,4 @@ export async function initializeDefaults() {
 }
 
 // Re-export defaults for use in options page
-export { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS, ALGORITHMS };
+export { DEFAULT_CHATBOTS, DEFAULT_PROMPTS, DEFAULT_SETTINGS, ALGORITHMS, DEFAULT_PREFERRED_CHATBOTS };

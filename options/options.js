@@ -11,7 +11,9 @@ import {
     getCustomChatbots,
     saveCustomChatbots,
     exportData,
-    importData
+    importData,
+    getPreferredChatbots,
+    savePreferredChatbots
 } from '../shared/storage.js';
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -21,6 +23,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // General
     const defaultAlgorithmSelect = document.getElementById('default-algorithm-select');
+    const sidebarEnabledCheckbox = document.getElementById('sidebar-enabled');
+    const sidebarShowNamesCheckbox = document.getElementById('sidebar-show-names');
+    const sidebarPositionSelect = document.getElementById('sidebar-position');
 
     // Prompts
     const addPromptBtn = document.getElementById('add-prompt-btn');
@@ -96,6 +101,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function loadAllData() {
         const settings = await getSettings();
         renderAlgorithms(settings.extractionAlgorithm || 1);
+        
+        sidebarEnabledCheckbox.checked = settings.sidebarEnabled !== false;
+        sidebarShowNamesCheckbox.checked = settings.sidebarShowNames === true;
+        sidebarPositionSelect.value = settings.sidebarPosition === 'left' ? 'left' : 'right';
+        
         await renderDefaultPrompts();
         await renderCustomPrompts();
         await renderDefaultChatbots();
@@ -120,6 +130,24 @@ document.addEventListener('DOMContentLoaded', async () => {
             settings.extractionAlgorithm = parseInt(defaultAlgorithmSelect.value);
             await saveSettings(settings);
             showToast('Default algorithm saved', 'success');
+        });
+
+        sidebarEnabledCheckbox.addEventListener('change', async () => {
+            const settings = await getSettings();
+            settings.sidebarEnabled = sidebarEnabledCheckbox.checked;
+            await saveSettings(settings);
+        });
+
+        sidebarShowNamesCheckbox.addEventListener('change', async () => {
+            const settings = await getSettings();
+            settings.sidebarShowNames = sidebarShowNamesCheckbox.checked;
+            await saveSettings(settings);
+        });
+
+        sidebarPositionSelect.addEventListener('change', async () => {
+            const settings = await getSettings();
+            settings.sidebarPosition = sidebarPositionSelect.value;
+            await saveSettings(settings);
         });
     }
 
@@ -164,13 +192,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Render default chatbots
     async function renderDefaultChatbots() {
         defaultChatbotsList.innerHTML = '';
+        const preferred = await getPreferredChatbots();
 
         Object.values(DEFAULT_CHATBOTS).forEach(bot => {
+            const isPreferred = preferred.includes(bot.id);
             const item = createListItem({
                 name: bot.name,
                 subtitle: bot.url,
                 isDefault: true,
-                badge: `${(bot.characterLimit / 1000).toFixed(0)}k chars`
+                badge: `${(bot.characterLimit / 1000).toFixed(0)}k chars`,
+                isPreferred: isPreferred,
+                onTogglePreferred: () => togglePreferredChatbot(bot.id)
             });
             defaultChatbotsList.appendChild(item);
         });
@@ -188,12 +220,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         noCustomChatbots.style.display = 'none';
 
+        const preferred = await getPreferredChatbots();
+
         Object.values(customChatbots).forEach(bot => {
+            const isPreferred = preferred.includes(bot.id);
             const item = createListItem({
                 name: bot.name,
                 subtitle: bot.url,
                 isDefault: false,
                 badge: `${(bot.characterLimit / 1000).toFixed(0)}k chars`,
+                isPreferred: isPreferred,
+                onTogglePreferred: () => togglePreferredChatbot(bot.id),
                 onEdit: () => showChatbotModal(bot),
                 onDelete: () => deleteChatbot(bot.id)
             });
@@ -201,8 +238,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
+    async function togglePreferredChatbot(botId) {
+        let preferred = await getPreferredChatbots();
+        if (preferred.includes(botId)) {
+            preferred = preferred.filter(id => id !== botId);
+        } else {
+            preferred.push(botId);
+        }
+        await savePreferredChatbots(preferred);
+        await renderDefaultChatbots();
+        await renderCustomChatbots();
+    }
+
     // Create list item element
-    function createListItem({ name, subtitle, isDefault, badge, onEdit, onDelete }) {
+    function createListItem({ name, subtitle, isDefault, badge, onEdit, onDelete, isPreferred, onTogglePreferred }) {
         const item = document.createElement('div');
         item.className = `list-item ${isDefault ? 'default' : ''}`;
 
@@ -230,7 +279,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         item.innerHTML = html;
 
-        if (!isDefault) {
+        if (onTogglePreferred) {
+            const prefBtn = document.createElement('button');
+            prefBtn.className = 'btn-icon pref-btn';
+            prefBtn.title = isPreferred ? 'Remove from Sidebar' : 'Add to Sidebar';
+            prefBtn.innerHTML = isPreferred ? '⭐' : '☆';
+            prefBtn.style.marginRight = '8px';
+            prefBtn.addEventListener('click', onTogglePreferred);
+            
+            // Insert before other actions
+            const actionsDiv = item.querySelector('.item-actions') || item;
+            if (actionsDiv === item) {
+                const newActions = document.createElement('div');
+                newActions.className = 'item-actions';
+                newActions.appendChild(prefBtn);
+                item.appendChild(newActions);
+            } else {
+                actionsDiv.insertBefore(prefBtn, actionsDiv.firstChild);
+            }
+        }
+
+        if (!isDefault && onEdit && onDelete) {
             item.querySelector('.edit-btn').addEventListener('click', onEdit);
             item.querySelector('.delete-btn').addEventListener('click', onDelete);
         }

@@ -105,8 +105,14 @@ export const DEFAULT_SETTINGS = {
     selectedChatbotId: 'chatgpt',
     includePrompt: true,
     openChatbot: true,
-    extractionAlgorithm: 1
+    extractionAlgorithm: 1,
+    sidebarEnabled: true,
+    sidebarPosition: 'right',
+    sidebarShowNames: false
 };
+
+// Default Preferred Chatbots
+export const DEFAULT_PREFERRED_CHATBOTS = ['chatgpt', 'claude', 'gemini'];
 
 // Available Extraction Algorithms
 export const ALGORITHMS = {

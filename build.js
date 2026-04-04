@@ -13,7 +13,8 @@ console.log(`🎯 Building for: ${targetBrowser.toUpperCase()}\n`);
 const bundledJsFiles = [
     'popup/popup.js',
     'options/options.js',
-    'content/extractor.ts'
+    'content/extractor.ts',
+    'content/sidebar.ts'
 ];
 
 // JS files to minify without bundling (standalone scripts)
@@ -24,7 +25,8 @@ const standaloneJsFiles = [
 // CSS files to minify
 const cssFiles = [
     'popup/popup.css',
-    'options/options.css'
+    'options/options.css',
+    'content/sidebar.css'
 ];
 
 // HTML files to minify
