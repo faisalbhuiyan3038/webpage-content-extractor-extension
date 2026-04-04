@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Save settings on change
     promptSelect.addEventListener('change', saveCurrentSettings);
     chatbotSelect.addEventListener('change', saveCurrentSettings);
+    algorithmSelect.addEventListener('change', saveCurrentSettings);
     includePromptCheckbox.addEventListener('change', saveCurrentSettings);
     openChatbotCheckbox.addEventListener('change', saveCurrentSettings);
 
@@ -60,23 +61,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             });
 
             // Populate algorithm dropdown
-            algorithmSelect.innerHTML = '<option value="default">Default Setting</option>';
+            algorithmSelect.innerHTML = '';
             Object.values(ALGORITHMS).forEach(algo => {
                 const option = document.createElement('option');
                 option.value = algo.id;
                 option.textContent = algo.name;
+                if (algo.id == (settings.extractionAlgorithm || 1)) {
+                    option.selected = true;
+                }
                 algorithmSelect.appendChild(option);
             });
 
-            // Populate other tabs list
+            // Populate all tabs list (including current)
             const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            const allTabs = await chrome.tabs.query({ currentWindow: true });
-            const otherTabs = allTabs.filter(t => t.id !== currentTab.id && t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('about:') && !t.url.startsWith('moz-extension://'));
+            const allTabs = await chrome.tabs.query({});
+            const validTabs = allTabs.filter(t => t.url && !t.url.startsWith('chrome://') && !t.url.startsWith('chrome-extension://') && !t.url.startsWith('about:') && !t.url.startsWith('moz-extension://'));
             
-            if (otherTabs.length > 0) {
+            if (validTabs.length > 0) {
                 tabsGroup.style.display = 'block';
                 tabsList.innerHTML = '';
-                otherTabs.forEach(t => {
+                validTabs.forEach(t => {
                     const label = document.createElement('label');
                     label.style.display = 'flex';
                     label.style.alignItems = 'center';
@@ -88,19 +92,30 @@ document.addEventListener('DOMContentLoaded', async () => {
                     cb.value = t.id;
                     cb.style.marginRight = '8px';
                     
+                    const isCurrent = currentTab && t.id === currentTab.id;
+                    if (isCurrent) {
+                        cb.checked = true;
+                    }
+                    
                     const title = document.createElement('span');
-                    title.textContent = t.title ? (t.title.length > 40 ? t.title.substring(0, 40) + '...' : t.title) : 'Untitled Tab';
+                    const tabTitleText = t.title ? (t.title.length > 40 ? t.title.substring(0, 40) + '...' : t.title) : 'Untitled Tab';
+                    title.textContent = isCurrent ? `[Current] ${tabTitleText}` : tabTitleText;
+                    
                     title.style.fontSize = '12px';
                     title.style.whiteSpace = 'nowrap';
                     title.style.overflow = 'hidden';
                     title.style.textOverflow = 'ellipsis';
+                    
+                    if (isCurrent) {
+                        title.style.fontWeight = 'bold';
+                    }
                     
                     label.appendChild(cb);
                     label.appendChild(title);
                     tabsList.appendChild(label);
                 });
             } else {
-                tabsList.innerHTML = '<div style="font-size: 12px; color: var(--text-muted); padding: 5px;">No other extractable tabs.</div>';
+                tabsGroup.style.display = 'none';
             }
 
             // Set checkbox states
@@ -138,7 +153,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             selectedPromptId: promptSelect.value,
             selectedChatbotId: chatbotSelect.value,
             includePrompt: includePromptCheckbox.checked,
-            openChatbot: openChatbotCheckbox.checked
+            openChatbot: openChatbotCheckbox.checked,
+            extractionAlgorithm: parseInt(algorithmSelect.value) || 1
         };
 
         await saveSettings(settings);
@@ -151,7 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const selectedChatbotId = chatbotSelect.value;
         const includePrompt = includePromptCheckbox.checked && selectedPromptId !== 'none';
         const openChatbot = openChatbotCheckbox.checked;
-        const selectedAlgorithm = algorithmSelect.value;
+        const selectedAlgorithm = parseInt(algorithmSelect.value) || 1;
 
         // Get selected tabs
         const selectedTabIds = Array.from(tabsList.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
@@ -159,14 +175,18 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Get prompt and chatbot details
         const allPrompts = await getAllPrompts();
         const allChatbots = await getAllChatbots();
-        const settings = await getSettings();
 
         const prompt = allPrompts.find(p => p.id === selectedPromptId);
         const chatbot = allChatbots[selectedChatbotId];
-        const algoToUse = selectedAlgorithm === 'default' ? (settings.extractionAlgorithm || 1) : parseInt(selectedAlgorithm);
+        const algoToUse = selectedAlgorithm;
 
         if (!chatbot) {
             showStatus('Please select a valid chatbot', 'error');
+            return;
+        }
+
+        if (selectedTabIds.length === 0) {
+            showStatus('Please select at least one tab to extract', 'error');
             return;
         }
 
@@ -175,34 +195,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         showStatus('Extracting content...', 'info');
 
         try {
-            // Get active tab
-            const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-            if (!activeTab) {
-                throw new Error('No active tab found');
-            }
-            
             // Build tab list to extract
-            const tabsToExtract = [activeTab];
-            if (selectedTabIds.length > 0) {
-                const allWinTabs = await chrome.tabs.query({ currentWindow: true });
-                selectedTabIds.forEach(id => {
-                    const t = allWinTabs.find(tab => tab.id === id);
-                    if (t) tabsToExtract.push(t);
-                });
-            }
+            const tabsToExtract = [];
+            const allTabs = await chrome.tabs.query({});
+            selectedTabIds.forEach(id => {
+                const t = allTabs.find(tab => tab.id === id);
+                if (t) tabsToExtract.push(t);
+            });
 
             // Detect if Firefox (uses pre-registered content scripts) or Chrome (needs dynamic injection)
             const isFirefox = navigator.userAgent.includes('Firefox');
 
-            let allContents = [];
-
-            for (const tab of tabsToExtract) {
+            const extractPromises = tabsToExtract.map(async (tab) => {
                 // Check if we can inject into this tab
                 if (!tab.url || tab.url.startsWith('chrome://') || tab.url.startsWith('chrome-extension://') ||
                     tab.url.startsWith('about:') || tab.url.startsWith('moz-extension://')) {
                     console.log(`Skipping tab ${tab.url || 'unknown'} - unextractable`);
-                    continue;
+                    return null;
                 }
 
                 if (!isFirefox) {
@@ -227,26 +236,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     if (response && response.success) {
                         const tabTitle = tab.title || 'Untitled Tab';
-                        // Prepend tab title if multiple tabs
                         let tabText = response.content;
                         if (tabsToExtract.length > 1) {
                             tabText = `=== Webpage: ${tabTitle} ===\nURL: ${tab.url}\n\n${tabText}\n`;
                         }
-                        allContents.push(tabText);
+                        return tabText;
                     } else {
                         console.log(`Extraction failed for tab ${tab.id}:`, response?.error);
+                        return null;
                     }
                 } catch (err) {
                     console.log(`Failed to message tab ${tab.id}:`, err.message);
+                    return null;
                 }
-            }
-            
-            if (allContents.length === 0) {
+            });
+
+            let allContents = await Promise.all(extractPromises);
+            // Filter out nulls
+            const validContents = allContents.filter(content => content !== null);
+
+            if (validContents.length === 0) {
                 throw new Error('Failed to extract any content.');
             }
 
             // Build final text
-            let finalText = allContents.join('\n\n');
+            let finalText = validContents.join('\n\n');
 
             if (includePrompt && prompt && prompt.content) {
                 finalText = `${prompt.content}\n\n---\n\n${tabsToExtract.length > 1 ? 'Combined Page Contents:' : 'Page Content:'}\n${finalText}`;

@@ -36,7 +36,7 @@ const htmlFiles = [
 async function build() {
     // Clean dist folder
     console.log('🧹 Cleaning dist folder...');
-    fs.removeSync(DIST_DIR);
+    fs.emptyDirSync(DIST_DIR);
     fs.mkdirSync(DIST_DIR, { recursive: true });
 
     // Create subdirectories
