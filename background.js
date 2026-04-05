@@ -163,6 +163,53 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
         });
         return true;
+    } else if (request.action === 'getOpenTabs') {
+        chrome.tabs.query({ currentWindow: true }).then(tabs => {
+            // Filter out the sender tab
+            const otherTabs = tabs.filter(tab => !sender.tab || tab.id !== sender.tab.id).map(tab => ({
+                id: tab.id,
+                title: tab.title,
+                url: tab.url,
+                favicon: tab.favIconUrl
+            }));
+            sendResponse({ success: true, tabs: otherTabs });
+        });
+        return true;
+    } else if (request.action === 'extractFromTabs') {
+        const { tabIds, characterLimit, algorithm } = request;
+        
+        Promise.all(tabIds.map(async (tabId) => {
+            try {
+                // Get tab info first so we have the title regardless of extractor response
+                const tab = await chrome.tabs.get(tabId);
+                const tabTitle = tab.title || `Tab ${tabId}`;
+
+                // Ensure extractor is injected
+                await chrome.scripting.executeScript({
+                    target: { tabId },
+                    files: ['content/extractor.js']
+                });
+                
+                // Extract
+                const response = await chrome.tabs.sendMessage(tabId, {
+                    action: 'extractContent',
+                    characterLimit,
+                    promptLength: 0,
+                    algorithm
+                });
+                
+                if (response && response.success) {
+                    return `--- Start: ${tabTitle} ---\n${response.content}\n--- End: ${tabTitle} ---`;
+                }
+                return `--- Failed to extract from: ${tabTitle} ---`;
+            } catch (err) {
+                console.error('Failed to extract from tab', tabId, err);
+                return `--- Failed to extract from Tab ${tabId} ---`;
+            }
+        })).then(results => {
+            sendResponse({ success: true, content: results.join('\n\n') });
+        });
+        return true;
     }
     return true;
 });

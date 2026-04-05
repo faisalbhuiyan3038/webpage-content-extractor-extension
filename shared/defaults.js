@@ -4,37 +4,43 @@ export const DEFAULT_CHATBOTS = {
         id: 'chatgpt',
         name: 'ChatGPT',
         url: 'https://chatgpt.com',
-        characterLimit: 40000
+        characterLimit: 40000,
+        promptInputSelector: '#prompt-textarea'
     },
     'claude': {
         id: 'claude',
         name: 'Claude',
         url: 'https://claude.ai/new',
-        characterLimit: 50000
+        characterLimit: 50000,
+        promptInputSelector: '[contenteditable="true"]'
     },
     'gemini': {
         id: 'gemini',
         name: 'Gemini',
         url: 'https://gemini.google.com/app',
-        characterLimit: 32000
+        characterLimit: 32000,
+        promptInputSelector: 'rich-textarea, #chat-input-textarea'
     },
     'grok': {
         id: 'grok',
         name: 'Grok',
         url: 'https://grok.com',
-        characterLimit: 100000
+        characterLimit: 100000,
+        promptInputSelector: 'textarea'
     },
     'deepseek': {
         id: 'deepseek',
         name: 'DeepSeek',
         url: 'https://chat.deepseek.com',
-        characterLimit: 200000
+        characterLimit: 200000,
+        promptInputSelector: 'textarea#chat-input'
     },
     'gemini_studio': {
         id: 'gemini_studio',
         name: 'Gemini AI Studio',
         url: 'https://aistudio.google.com/prompts/new_chat',
-        characterLimit: 100000
+        characterLimit: 100000,
+        promptInputSelector: 'textarea'
     }
 };
 
@@ -108,7 +114,8 @@ export const DEFAULT_SETTINGS = {
     extractionAlgorithm: 1,
     sidebarEnabled: true,
     sidebarPosition: 'right',
-    sidebarShowNames: false
+    sidebarShowNames: false,
+    injectorPosition: 'inside'
 };
 
 // Default Preferred Chatbots

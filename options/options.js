@@ -26,6 +26,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sidebarEnabledCheckbox = document.getElementById('sidebar-enabled');
     const sidebarShowNamesCheckbox = document.getElementById('sidebar-show-names');
     const sidebarPositionSelect = document.getElementById('sidebar-position');
+    const injectorPositionSelect = document.getElementById('injector-position');
 
     // Prompts
     const addPromptBtn = document.getElementById('add-prompt-btn');
@@ -105,6 +106,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         sidebarEnabledCheckbox.checked = settings.sidebarEnabled !== false;
         sidebarShowNamesCheckbox.checked = settings.sidebarShowNames === true;
         sidebarPositionSelect.value = settings.sidebarPosition === 'left' ? 'left' : 'right';
+        if (injectorPositionSelect) {
+            injectorPositionSelect.value = settings.injectorPosition || 'inside';
+        }
         
         await renderDefaultPrompts();
         await renderCustomPrompts();
@@ -149,6 +153,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             settings.sidebarPosition = sidebarPositionSelect.value;
             await saveSettings(settings);
         });
+
+        if (injectorPositionSelect) {
+            injectorPositionSelect.addEventListener('change', async () => {
+                const settings = await getSettings();
+                settings.injectorPosition = injectorPositionSelect.value;
+                await saveSettings(settings);
+                showToast('Injector position saved', 'success');
+            });
+        }
     }
 
     // Render default prompts
@@ -193,8 +206,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     async function renderDefaultChatbots() {
         defaultChatbotsList.innerHTML = '';
         const preferred = await getPreferredChatbots();
+        const customChatbots = await getCustomChatbots();
 
-        Object.values(DEFAULT_CHATBOTS).forEach(bot => {
+        Object.values(DEFAULT_CHATBOTS).forEach(defaultBot => {
+            const isModified = !!customChatbots[defaultBot.id];
+            const bot = customChatbots[defaultBot.id] || defaultBot;
             const isPreferred = preferred.includes(bot.id);
             const item = createListItem({
                 name: bot.name,
@@ -202,7 +218,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 isDefault: true,
                 badge: `${(bot.characterLimit / 1000).toFixed(0)}k chars`,
                 isPreferred: isPreferred,
-                onTogglePreferred: () => togglePreferredChatbot(bot.id)
+                onTogglePreferred: () => togglePreferredChatbot(bot.id),
+                onEdit: () => showChatbotModal(bot),
+                onReset: isModified ? () => resetDefaultChatbot(bot.id) : null
             });
             defaultChatbotsList.appendChild(item);
         });
@@ -223,6 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const preferred = await getPreferredChatbots();
 
         Object.values(customChatbots).forEach(bot => {
+            if (DEFAULT_CHATBOTS[bot.id]) return; // Skip if it's a modified default bot
             const isPreferred = preferred.includes(bot.id);
             const item = createListItem({
                 name: bot.name,
@@ -251,7 +270,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Create list item element
-    function createListItem({ name, subtitle, isDefault, badge, onEdit, onDelete, isPreferred, onTogglePreferred }) {
+    function createListItem({ name, subtitle, isDefault, badge, onEdit, onDelete, onReset, isPreferred, onTogglePreferred }) {
         const item = document.createElement('div');
         item.className = `list-item ${isDefault ? 'default' : ''}`;
 
@@ -268,6 +287,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (isDefault) {
             html += '<span class="item-badge">Default</span>';
+            if (onEdit) {
+                html += `
+                    <div class="item-actions">
+                        <button class="btn-icon edit-btn" title="Edit">✏️</button>
+                        ${onReset ? '<button class="btn-icon reset-btn" title="Reset to Default">🔄</button>' : ''}
+                    </div>
+                `;
+            }
         } else {
             html += `
                 <div class="item-actions">
@@ -299,6 +326,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
 
+        if (isDefault && onEdit) {
+            item.querySelector('.edit-btn').addEventListener('click', onEdit);
+            if (onReset) {
+                item.querySelector('.reset-btn').addEventListener('click', onReset);
+            }
+        }
         if (!isDefault && onEdit && onDelete) {
             item.querySelector('.edit-btn').addEventListener('click', onEdit);
             item.querySelector('.delete-btn').addEventListener('click', onDelete);
@@ -359,10 +392,37 @@ document.addEventListener('DOMContentLoaded', async () => {
                     value="${bot ? bot.characterLimit : '40000'}">
                 <p class="form-help">Maximum characters the chatbot accepts. Default is 40,000.</p>
             </div>
+            <div class="form-group">
+                <label for="chatbot-selector">Prompt Box Selector (Optional)</label>
+                <input type="text" id="chatbot-selector" class="form-input" 
+                    placeholder="e.g. textarea#prompt">
+                <p class="form-help">CSS selector for the text input box on the chatbot's website where text will be sent. Built-in chatbots handle this automatically.</p>
+            </div>
+            <div class="form-group">
+                <label for="chatbot-injector-selector">Button Injector Selector (Optional)</label>
+                <input type="text" id="chatbot-injector-selector" class="form-input" 
+                    placeholder="e.g. form">
+                <p class="form-help">CSS selector for the HTML element to attach the UI buttons to. If left blank, it defaults to the Prompt Box Selector.</p>
+            </div>
         `;
 
         modalOverlay.classList.add('show');
         document.getElementById('chatbot-name').focus();
+
+        // Fill form if editing
+        if (bot) {
+            document.getElementById('chatbot-name').value = bot.name || '';
+            document.getElementById('chatbot-url').value = bot.url || '';
+            document.getElementById('chatbot-limit').value = bot.characterLimit || 40000;
+            document.getElementById('chatbot-selector').value = bot.promptInputSelector || '';
+            document.getElementById('chatbot-injector-selector').value = bot.buttonInjectorSelector || '';
+        } else {
+            document.getElementById('chatbot-name').value = '';
+            document.getElementById('chatbot-url').value = '';
+            document.getElementById('chatbot-limit').value = 40000;
+            document.getElementById('chatbot-selector').value = '';
+            document.getElementById('chatbot-injector-selector').value = '';
+        }
     }
 
     // Close modal
@@ -406,8 +466,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         await saveCustomPrompts(prompts);
         await renderCustomPrompts();
+        showToast(currentEditId !== null && currentEditId >= 0 ? 'Prompt updated!' : 'Prompt added!', 'success');
         closeModal();
-        showToast(currentEditId >= 0 ? 'Prompt updated!' : 'Prompt added!', 'success');
     }
 
     // Delete prompt
@@ -426,6 +486,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         const name = document.getElementById('chatbot-name').value.trim();
         const url = document.getElementById('chatbot-url').value.trim();
         const limit = parseInt(document.getElementById('chatbot-limit').value) || 40000;
+        const selector = document.getElementById('chatbot-selector').value.trim();
+        const injectorSelector = document.getElementById('chatbot-injector-selector').value.trim();
 
         if (!name || !url) {
             showToast('Please fill in all fields', 'error');
@@ -449,10 +511,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             characterLimit: limit
         };
 
+        if (selector) {
+            chatbots[botId].promptInputSelector = selector;
+        }
+        if (injectorSelector) {
+            chatbots[botId].buttonInjectorSelector = injectorSelector;
+        }
+
         await saveCustomChatbots(chatbots);
         await renderCustomChatbots();
+        await renderDefaultChatbots();
+        
+        const wasUpdate = currentEditId !== null;
+        showToast(wasUpdate ? 'Chatbot updated!' : 'Chatbot added!', 'success');
         closeModal();
-        showToast(currentEditId ? 'Chatbot updated!' : 'Chatbot added!', 'success');
     }
 
     // Delete chatbot
@@ -464,6 +536,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         await saveCustomChatbots(chatbots);
         await renderCustomChatbots();
         showToast('Chatbot deleted', 'success');
+    }
+
+    // Reset default chatbot modifications
+    async function resetDefaultChatbot(id) {
+        if (!confirm('Reset this built-in chatbot to its original defaults?')) return;
+
+        const chatbots = await getCustomChatbots();
+        delete chatbots[id];
+        await saveCustomChatbots(chatbots);
+        await renderDefaultChatbots();
+        showToast('Chatbot reset to defaults', 'success');
     }
 
     // Open browser shortcuts page

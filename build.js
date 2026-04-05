@@ -14,7 +14,8 @@ const bundledJsFiles = [
     'popup/popup.js',
     'options/options.js',
     'content/extractor.ts',
-    'content/sidebar.ts'
+    'content/sidebar.ts',
+    'content/chatbot_injector.ts'
 ];
 
 // JS files to minify without bundling (standalone scripts)
@@ -26,7 +27,8 @@ const standaloneJsFiles = [
 const cssFiles = [
     'popup/popup.css',
     'options/options.css',
-    'content/sidebar.css'
+    'content/sidebar.css',
+    'content/chatbot_injector.css'
 ];
 
 // HTML files to minify

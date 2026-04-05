@@ -35,11 +35,13 @@
                 "<all_urls>"
             ],
             "css": [
-                "content/sidebar.css"
+                "content/sidebar.css",
+                "content/chatbot_injector.css"
             ],
             "js": [
                 "content/extractor.js",
-                "content/sidebar.js"
+                "content/sidebar.js",
+                "content/chatbot_injector.js"
             ],
             "run_at": "document_idle"
         }
