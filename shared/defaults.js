@@ -1,39 +1,41 @@
-// Default Chatbots - preserved from userscript
+// Default Chatbots
 export const DEFAULT_CHATBOTS = {
     'chatgpt': {
         id: 'chatgpt',
         name: 'ChatGPT',
         url: 'https://chatgpt.com',
-        characterLimit: 40000,
+        characterLimit: 200000,
         promptInputSelector: '#prompt-textarea'
     },
     'claude': {
         id: 'claude',
         name: 'Claude',
         url: 'https://claude.ai/new',
-        characterLimit: 50000,
+        characterLimit: 200000,
         promptInputSelector: '[contenteditable="true"]'
     },
     'gemini': {
         id: 'gemini',
         name: 'Gemini',
         url: 'https://gemini.google.com/app',
-        characterLimit: 32000,
-        promptInputSelector: 'rich-textarea, #chat-input-textarea'
+        characterLimit: 400000,
+        promptInputSelector: "div[aria-label='Enter a prompt for Gemini']"
     },
     'grok': {
         id: 'grok',
         name: 'Grok',
         url: 'https://grok.com',
-        characterLimit: 100000,
-        promptInputSelector: 'textarea'
+        characterLimit: 200000,
+        // Grok uses a ProseMirror contenteditable div; inject as sibling to avoid overlap with send button
+        promptInputSelector: 'div.tiptap.ProseMirror',
+        injectorPosition: 'sibling'
     },
     'deepseek': {
         id: 'deepseek',
         name: 'DeepSeek',
         url: 'https://chat.deepseek.com',
         characterLimit: 200000,
-        promptInputSelector: 'textarea#chat-input'
+        promptInputSelector: "textarea[placeholder='Message DeepSeek']"
     },
     'gemini_studio': {
         id: 'gemini_studio',
@@ -41,10 +43,87 @@ export const DEFAULT_CHATBOTS = {
         url: 'https://aistudio.google.com/prompts/new_chat',
         characterLimit: 100000,
         promptInputSelector: 'textarea'
+    },
+    'copilot': {
+        id: 'copilot',
+        name: 'Microsoft Copilot',
+        url: 'https://copilot.microsoft.com/',
+        characterLimit: 40000,
+        promptInputSelector: '#userInput'
+    },
+    'qwen': {
+        id: 'qwen',
+        name: 'Qwen',
+        url: 'https://chat.qwen.ai/',
+        characterLimit: 300000,
+        promptInputSelector: "textarea[placeholder='How can I help you today?']"
+    },
+    'minimax': {
+        id: 'minimax',
+        name: 'MiniMax AI',
+        url: 'https://agent.minimax.io/',
+        characterLimit: 300000,
+        promptInputSelector: '.tiptap.ProseMirror.tiptap-editor'
+    },
+    'mistral': {
+        id: 'mistral',
+        name: 'LeChat Mistral',
+        url: 'https://chat.mistral.ai/chat',
+        characterLimit: 200000,
+        promptInputSelector: '.ProseMirror'
+    },
+    'kimi': {
+        id: 'kimi',
+        name: 'Kimi AI',
+        url: 'https://www.kimi.com/',
+        characterLimit: 200000,
+        promptInputSelector: "div[role='textbox']"
+    },
+    'zai': {
+        id: 'zai',
+        name: 'Z.ai',
+        url: 'https://chat.z.ai/',
+        characterLimit: 200000,
+        promptInputSelector: '#chat-input'
+    },
+    'reka': {
+        id: 'reka',
+        name: 'Reka Chat',
+        url: 'https://app.reka.ai/chat',
+        characterLimit: 200000,
+        promptInputSelector: '#message'
+    },
+    'inception': {
+        id: 'inception',
+        name: 'Inception Chat',
+        url: 'https://chat.inceptionlabs.ai/',
+        characterLimit: 200000,
+        promptInputSelector: "textarea[placeholder='How can I help you?']"
+    },
+    'ai2': {
+        id: 'ai2',
+        name: 'Ai2 Playground',
+        url: 'https://playground.allenai.org/',
+        characterLimit: 200000,
+        promptInputSelector: "textarea[placeholder='Message Olmo 3.1 32B Instruct']"
+    },
+    'alice': {
+        id: 'alice',
+        name: 'Alice AI',
+        url: 'https://alice.yandex.ru/',
+        characterLimit: 300000,
+        promptInputSelector: "textarea[placeholder='Спросите о чём угодно']"
+    },
+    'xiaomimimo': {
+        id: 'xiaomimimo',
+        name: 'Xiaomi MiMo',
+        url: 'https://aistudio.xiaomimimo.com/#/c',
+        characterLimit: 300000,
+        promptInputSelector: "textarea[placeholder='Sign in to continue chatting']"
     }
 };
 
-// Default Prompts - preserved from userscript
+// Default Prompts
 export const DEFAULT_PROMPTS = [
     {
         id: 'none',
@@ -97,7 +176,7 @@ Don't start the text with "Let me...", or "Here is the summary...". Just give th
     }
 ];
 
-// Truncation Config - preserved from userscript
+// Truncation Config
 export const TRUNC_CONFIG = {
     characterLimit: 20000,
     initialContentRatio: 0.4,

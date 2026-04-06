@@ -371,38 +371,40 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentEditId = bot ? bot.id : null;
 
         modalTitle.textContent = bot ? 'Edit Chatbot' : 'Add Chatbot';
+        const botInjPos = (bot && bot.injectorPosition) ? bot.injectorPosition : '';
         modalBody.innerHTML = `
             <div class="form-group">
-                <label for="chatbot-name">Chatbot Name</label>
-                <input type="text" id="chatbot-name" class="form-input" 
-                    placeholder="e.g., My Custom AI" 
-                    value="${bot ? escapeHtml(bot.name) : ''}">
+                <label for="chatbot-name" class="form-label">Chatbot Name</label>
+                <input type="text" id="chatbot-name" class="form-input" placeholder="e.g., My Custom AI" value="${bot ? escapeHtml(bot.name) : ''}">
             </div>
             <div class="form-group">
-                <label for="chatbot-url">Chat URL</label>
-                <input type="url" id="chatbot-url" class="form-input" 
-                    placeholder="https://example.com/chat" 
-                    value="${bot ? escapeHtml(bot.url) : ''}">
-                <p class="form-help">The URL where you can paste and chat with the AI.</p>
+                <label for="chatbot-url" class="form-label">Chat URL</label>
+                <input type="url" id="chatbot-url" class="form-input" placeholder="https://example.com/chat" value="${bot ? escapeHtml(bot.url) : ''}">
+                <p class="form-help">The URL where you chat with the AI.</p>
             </div>
             <div class="form-group">
-                <label for="chatbot-limit">Character Limit</label>
-                <input type="number" id="chatbot-limit" class="form-input" 
-                    placeholder="40000" 
-                    value="${bot ? bot.characterLimit : '40000'}">
-                <p class="form-help">Maximum characters the chatbot accepts. Default is 40,000.</p>
+                <label for="chatbot-limit" class="form-label">Character Limit</label>
+                <input type="number" id="chatbot-limit" class="form-input" placeholder="40000" value="${bot ? bot.characterLimit : '40000'}">
+                <p class="form-help">Maximum characters extracted per injection. Default 40,000.</p>
             </div>
             <div class="form-group">
-                <label for="chatbot-selector">Prompt Box Selector (Optional)</label>
-                <input type="text" id="chatbot-selector" class="form-input" 
-                    placeholder="e.g. textarea#prompt">
-                <p class="form-help">CSS selector for the text input box on the chatbot's website where text will be sent. Built-in chatbots handle this automatically.</p>
+                <label for="chatbot-selector" class="form-label">Prompt Box Selector <span style="font-weight:400;color:var(--text-muted)">(Optional)</span></label>
+                <input type="text" id="chatbot-selector" class="form-input" placeholder="e.g. textarea#prompt-input">
+                <p class="form-help">CSS selector for the textarea / contenteditable where prompts are typed. Required to enable inject icons on this site.</p>
             </div>
             <div class="form-group">
-                <label for="chatbot-injector-selector">Button Injector Selector (Optional)</label>
-                <input type="text" id="chatbot-injector-selector" class="form-input" 
-                    placeholder="e.g. form">
-                <p class="form-help">CSS selector for the HTML element to attach the UI buttons to. If left blank, it defaults to the Prompt Box Selector.</p>
+                <label for="chatbot-injector-selector" class="form-label">Button Parent Selector <span style="font-weight:400;color:var(--text-muted)">(Optional)</span></label>
+                <input type="text" id="chatbot-injector-selector" class="form-input" placeholder="e.g. form">
+                <p class="form-help">Element the icons attach to. Defaults to the Prompt Box Selector if blank.</p>
+            </div>
+            <div class="form-group">
+                <label for="chatbot-injector-position" class="form-label">Icon Position <span style="font-weight:400;color:var(--text-muted)">(Optional)</span></label>
+                <select id="chatbot-injector-position" class="select-input">
+                    <option value="">Use global setting</option>
+                    <option value="inside">Inside text box (Top Right)</option>
+                    <option value="sibling">Outside text box (Below)</option>
+                </select>
+                <p class="form-help">Override icon placement for this chatbot only. Use "Outside" if clicking the icon accidentally triggers the send button.</p>
             </div>
         `;
 
@@ -416,12 +418,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('chatbot-limit').value = bot.characterLimit || 40000;
             document.getElementById('chatbot-selector').value = bot.promptInputSelector || '';
             document.getElementById('chatbot-injector-selector').value = bot.buttonInjectorSelector || '';
+            document.getElementById('chatbot-injector-position').value = botInjPos;
         } else {
             document.getElementById('chatbot-name').value = '';
             document.getElementById('chatbot-url').value = '';
             document.getElementById('chatbot-limit').value = 40000;
             document.getElementById('chatbot-selector').value = '';
             document.getElementById('chatbot-injector-selector').value = '';
+            document.getElementById('chatbot-injector-position').value = '';
         }
     }
 
@@ -488,9 +492,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         const limit = parseInt(document.getElementById('chatbot-limit').value) || 40000;
         const selector = document.getElementById('chatbot-selector').value.trim();
         const injectorSelector = document.getElementById('chatbot-injector-selector').value.trim();
+        const injectorPosition = document.getElementById('chatbot-injector-position').value.trim();
 
         if (!name || !url) {
-            showToast('Please fill in all fields', 'error');
+            showToast('Please fill in all required fields', 'error');
             return;
         }
 
@@ -504,24 +509,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         const chatbots = await getCustomChatbots();
         const botId = currentEditId || `custom-${Date.now()}`;
 
-        chatbots[botId] = {
-            id: botId,
-            name,
-            url,
-            characterLimit: limit
-        };
+        chatbots[botId] = { id: botId, name, url, characterLimit: limit };
 
-        if (selector) {
-            chatbots[botId].promptInputSelector = selector;
-        }
-        if (injectorSelector) {
-            chatbots[botId].buttonInjectorSelector = injectorSelector;
-        }
+        if (selector)         chatbots[botId].promptInputSelector   = selector;
+        if (injectorSelector) chatbots[botId].buttonInjectorSelector = injectorSelector;
+        if (injectorPosition) chatbots[botId].injectorPosition       = injectorPosition;
 
         await saveCustomChatbots(chatbots);
         await renderCustomChatbots();
         await renderDefaultChatbots();
-        
+
         const wasUpdate = currentEditId !== null;
         showToast(wasUpdate ? 'Chatbot updated!' : 'Chatbot added!', 'success');
         closeModal();
