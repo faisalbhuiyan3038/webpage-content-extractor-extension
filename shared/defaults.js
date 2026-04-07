@@ -26,9 +26,10 @@ export const DEFAULT_CHATBOTS = {
         name: 'Grok',
         url: 'https://grok.com',
         characterLimit: 200000,
-        // Grok uses a ProseMirror contenteditable div; inject as sibling to avoid overlap with send button
-        promptInputSelector: 'div.tiptap.ProseMirror',
-        injectorPosition: 'sibling'
+        // Use the stable tiptap ProseMirror class — the long Tailwind classname changes on deploys
+        promptInputSelector: 'div.tiptap.ProseMirror[contenteditable="true"]',
+        // buttons are body-mounted, position tracked via getBoundingClientRect
+        injectorPosition: 'inside'
     },
     'deepseek': {
         id: 'deepseek',
@@ -56,7 +57,8 @@ export const DEFAULT_CHATBOTS = {
         name: 'Qwen',
         url: 'https://chat.qwen.ai/',
         characterLimit: 300000,
-        promptInputSelector: "textarea[placeholder='How can I help you today?']"
+        promptInputSelector: "textarea[placeholder='How can I help you today?']",
+        buttonInjectorSelector: ".message-input-container",
     },
     'minimax': {
         id: 'minimax',

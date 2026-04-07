@@ -1,6 +1,6 @@
 {
     "manifest_version": 3,
-    "name": "Webpage Content Extractor / Chat",
+    "name": "Webpage Content Extractor - Chat with any Webpage",
     "version": "1.0.0",
     "description": "Extract text from any webpage and chat with ChatGPT, Claude, Gemini etc. Free webpage chat tool with custom prompts.",
     "permissions": [
@@ -8,7 +8,9 @@
         "clipboardWrite",
         "storage",
         "scripting",
-        "tabs",
+        "tabs"
+    ],
+    "host_permissions": [
         "<all_urls>"
     ],
     "action": {
@@ -25,9 +27,7 @@
         "open_in_tab": true
     },
     "background": {
-        "scripts": [
-            "background.js"
-        ]
+        "service_worker": "background.js"
     },
     "content_scripts": [
         {
@@ -62,15 +62,5 @@
         "32": "icons/icon32.png",
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
-    },
-    "browser_specific_settings": {
-        "gecko": {
-            "id": "webpage-content-extractor@faisalbhuiyan.com",
-            "data_collection_permissions": {
-                "required": [
-                    "none"
-                ]
-            }
-        }
     }
 }
