@@ -20,11 +20,15 @@ class Popover {
         this.el.appendChild(content);
         document.body.appendChild(this.el);
 
-        // Block all events from escaping the popover (prevents accidental form submit)
-        ['click','mousedown','mouseup','keydown','keyup','keypress'].forEach(ev => {
+        // Stop events from bubbling OUT of the popover into the host page.
+        // MUST use bubbling phase (false), NOT capture (true).
+        // Capture-phase stopPropagation fires before children receive the event,
+        // which breaks all item clicks. Bubbling fires after children, only
+        // preventing the event from reaching the chatbot page's own handlers.
+        ['click', 'mousedown', 'mouseup', 'keydown', 'keyup', 'keypress'].forEach(ev => {
             const h = (e: Event) => { e.stopPropagation(); };
-            this.el.addEventListener(ev, h, true);
-            this.cleanups.push(() => this.el.removeEventListener(ev, h, true));
+            this.el.addEventListener(ev, h, false);
+            this.cleanups.push(() => this.el.removeEventListener(ev, h, false));
         });
 
         // Close on outside mousedown
