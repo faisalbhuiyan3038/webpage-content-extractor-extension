@@ -1,8 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "Webpage Content Extractor - Chat with any Webpage",
+    "name": "Extract & Ask: AI Workflow Tool",
     "version": "1.0.1",
-    "description": "Extract text from any webpage and chat with ChatGPT, Claude, Gemini etc. Free webpage chat tool with custom prompts.",
+    "description": "Extract web content from any tab, prepend AI prompts, and paste instantly into ChatGPT,Gemini etc. Local processing, zero tracking.",
     "permissions": [
         "activeTab",
         "clipboardWrite",
