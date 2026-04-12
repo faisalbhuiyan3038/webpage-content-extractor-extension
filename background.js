@@ -164,7 +164,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true;
     } else if (request.action === 'getOpenTabs') {
-        chrome.tabs.query({ currentWindow: true }).then(tabs => {
+        chrome.tabs.query({}).then(tabs => {
             // Filter out the sender tab
             const otherTabs = tabs.filter(tab => !sender.tab || tab.id !== sender.tab.id).map(tab => ({
                 id: tab.id,
