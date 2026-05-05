@@ -193,6 +193,7 @@ export const DEFAULT_SETTINGS = {
     includePrompt: true,
     openChatbot: true,
     extractionAlgorithm: 1,
+    iframeSource: 'main',
     sidebarEnabled: true,
     sidebarPosition: 'right',
     sidebarShowNames: false,

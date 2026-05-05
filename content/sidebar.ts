@@ -4,6 +4,10 @@
  */
 
 (function initSidebar() {
+    // Only run in the top-level frame — all_frames:true means this script also
+    // runs inside iframes, but we never want the sidebar UI inside a sub-frame.
+    if (window !== window.top) return;
+
     // Avoid multiple injections
     if (document.getElementById('wce-ai-sidebar-container')) return;
 

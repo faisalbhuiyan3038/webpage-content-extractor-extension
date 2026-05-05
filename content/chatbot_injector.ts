@@ -359,39 +359,109 @@ class PromptInjector {
 
         const { footer, btn } = this.makePopoverFooter('Extract & Insert', async () => {
             if (this.selectedTabIds.size === 0) {
-                btn.textContent = 'Select a tab first!';
-                setTimeout(() => { btn.textContent = 'Extract & Insert'; }, 1800);
+                this.showPopoverError(footer, 'Select at least one tab first.');
                 return;
             }
             btn.disabled = true; btn.textContent = 'Extracting…';
             try {
                 const settings = await getSettings();
+                // Read selected iframe source from the radio group
+                const iframeRadio = panel.querySelector('input[name="wce-iframe-src"]:checked') as HTMLInputElement | null;
+                const iframeSource = iframeRadio?.value || 'main';
+
                 const resp = await chrome.runtime.sendMessage({
                     action: 'extractFromTabs',
                     tabIds: Array.from(this.selectedTabIds),
                     characterLimit: 40000,
-                    algorithm: (settings as any).extractionAlgorithm || 1
+                    algorithm: (settings as any).extractionAlgorithm || 1,
+                    iframeSource,
+                    frameTargets: [] // empty = auto-first iframe default
                 });
-                if (resp?.success) {
+
+                if (resp?.success && resp.content) {
+                    // Only insert real content — never insert error strings
                     this.appendToTarget(resp.content);
                     pop.close(); this.activePopover = null;
                     this.selectedTabIds.clear();
                 } else {
-                    btn.textContent = 'Extraction failed';
-                    setTimeout(() => { btn.textContent = 'Extract & Insert'; btn.disabled = false; }, 2000);
+                    // Show error in the popover UI — never inject errors into the chatbot input
+                    const msg = resp?.error || 'Extraction failed. The page may not be loaded yet.';
+                    this.showPopoverError(footer, msg);
+                    btn.disabled = false;
+                    btn.textContent = 'Extract & Insert';
                 }
             } catch (e) {
                 console.error(e);
-                btn.textContent = 'Error occurred';
-                setTimeout(() => { btn.textContent = 'Extract & Insert'; btn.disabled = false; }, 2000);
+                this.showPopoverError(footer, 'An unexpected error occurred.');
+                btn.disabled = false;
+                btn.textContent = 'Extract & Insert';
             }
         });
 
+        // ── Iframe source selector (radio group) ──────────────────────────────
+        const iframeSrcSection = document.createElement('div');
+        iframeSrcSection.className = 'wce-iframe-src-section';
+        iframeSrcSection.style.cssText = 'border-top:1px solid rgba(255,255,255,0.08);padding:8px 12px 4px;';
+
+        const iframeSrcLabel = document.createElement('div');
+        iframeSrcLabel.textContent = 'Extract From';
+        iframeSrcLabel.style.cssText = 'font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;opacity:.6;margin-bottom:6px;';
+        iframeSrcSection.appendChild(iframeSrcLabel);
+
+        const radioRow = document.createElement('div');
+        radioRow.style.cssText = 'display:flex;gap:12px;flex-wrap:wrap;';
+
+        const srcOptions = [
+            { value: 'main',   label: 'Main Doc' },
+            { value: 'iframes', label: 'Iframes' },
+            { value: 'both',   label: 'Both' }
+        ];
+        srcOptions.forEach(opt => {
+            const lbl = document.createElement('label');
+            lbl.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'wce-iframe-src';
+            radio.value = opt.value;
+            if (opt.value === 'main') radio.checked = true;
+            lbl.appendChild(radio);
+            lbl.appendChild(document.createTextNode(opt.label));
+            radioRow.appendChild(lbl);
+        });
+        iframeSrcSection.appendChild(radioRow);
+
         panel.appendChild(this.makePopoverHeader('Select Tabs to Extract'));
         panel.appendChild(list);
+        panel.appendChild(iframeSrcSection);
         panel.appendChild(footer);
         const pop = new Popover(trigger, panel);
         return pop;
+    }
+
+    // ── Error display ─────────────────────────────────────────────────────────
+
+    /** Shows a brief red error message inside a popover container element.
+     *  Auto-dismisses after 4 s. Never touches the chatbot input. */
+    private showPopoverError(container: HTMLElement, message: string) {
+        // Remove any existing error banner first
+        container.querySelectorAll('.wce-pop-error').forEach(el => el.remove());
+
+        const err = document.createElement('div');
+        err.className = 'wce-pop-error';
+        err.textContent = message;
+        err.style.cssText = [
+            'font-size:12px',
+            'color:#ff6b6b',
+            'background:rgba(255,107,107,0.12)',
+            'border:1px solid rgba(255,107,107,0.3)',
+            'border-radius:6px',
+            'padding:6px 10px',
+            'margin-top:8px',
+            'line-height:1.4',
+            'word-break:break-word'
+        ].join(';');
+        container.appendChild(err);
+        setTimeout(() => err.remove(), 4000);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -490,10 +560,14 @@ class PromptInjector {
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────────
 
-const initInjector = () => new PromptInjector().init().catch(console.error);
+// Only run in the top-level frame — with all_frames:true this script also
+// executes inside iframes, but chatbot injection must only happen on the main page.
+if (window === window.top) {
+    const initInjector = () => new PromptInjector().init().catch(console.error);
 
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => setTimeout(initInjector, 150));
-} else {
-    setTimeout(initInjector, 500);
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(initInjector, 150));
+    } else {
+        setTimeout(initInjector, 500);
+    }
 }

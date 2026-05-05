@@ -9,6 +9,7 @@
         "storage",
         "scripting",
         "tabs",
+        "webNavigation",
         "<all_urls>"
     ],
     "action": {
@@ -34,6 +35,8 @@
             "matches": [
                 "<all_urls>"
             ],
+            "all_frames": true,
+            "match_about_blank": true,
             "css": [
                 "content/sidebar.css",
                 "content/chatbot_injector.css"

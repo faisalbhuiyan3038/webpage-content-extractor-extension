@@ -686,10 +686,46 @@ function parseWithReadability(ReadabilityClass: any): any {
 }
 
 // ═══════════════════════════════════════════════════════
+// IFRAME DISCOVERY
+// ═══════════════════════════════════════════════════════
+
+/**
+ * Returns a flat list of all iframes visible in the current document,
+ * including nested ones, with hierarchical path labels.
+ * Used by the background to cross-reference against webNavigation frame data.
+ */
+function discoverIframes(): Array<{ label: string; src: string; depth: number }> {
+    const results: Array<{ label: string; src: string; depth: number }> = [];
+
+    function walk(win: Window, parentLabel: string, depth: number) {
+        try {
+            const iframes = Array.from(win.document.querySelectorAll('iframe'));
+            iframes.forEach((iframe, idx) => {
+                const seg = `iframe-${idx}`;
+                const label = parentLabel ? `${parentLabel} > ${seg}` : `main > ${seg}`;
+                const src = iframe.src || iframe.getAttribute('src') || '(no src)';
+                results.push({ label, src, depth });
+                // Recurse into accessible same-origin iframes
+                try {
+                    const childWin = iframe.contentWindow;
+                    if (childWin && childWin.document) {
+                        walk(childWin, label, depth + 1);
+                    }
+                } catch (_) { /* cross-origin child — will be discovered via webNavigation */ }
+            });
+        } catch (_) { /* skip inaccessible window */ }
+    }
+
+    walk(window, '', 1);
+    return results;
+}
+
+// ═══════════════════════════════════════════════════════
 // MESSAGE LISTENER
 // ═══════════════════════════════════════════════════════
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+    // ── Extract page content (main algorithm dispatcher) ──────────────────────
     if (request.action === 'extractContent') {
         const charLimit = request.characterLimit || TRUNC_CONFIG.characterLimit;
         const promptLength = request.promptLength || 0;
@@ -715,5 +751,28 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
             
         return true; // Keep message channel open for async response
+    }
+
+    // ── Return identity info for this frame (used by background frame resolver) ─
+    if (request.action === 'getFrameInfo') {
+        sendResponse({
+            success: true,
+            title: document.title || '',
+            url: window.location.href,
+            isSubFrame: window !== window.top
+        });
+        return false;
+    }
+
+    // ── Discover iframes in the current (main) document ───────────────────────
+    // Only useful when called on the main frame (frameId 0).
+    if (request.action === 'getIframesDOM') {
+        try {
+            const iframes = discoverIframes();
+            sendResponse({ success: true, iframes });
+        } catch (e) {
+            sendResponse({ success: false, iframes: [] });
+        }
+        return false;
     }
 });

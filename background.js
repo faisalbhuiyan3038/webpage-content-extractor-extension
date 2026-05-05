@@ -65,13 +65,14 @@ chrome.commands.onCommand.addListener(async (command) => {
                 files: ['content/extractor.js']
             });
 
-            // Send extraction request
+            // Send extraction request — always target frameId 0 (main frame)
+            // With all_frames:true, omitting frameId would let any iframe respond first.
             const response = await chrome.tabs.sendMessage(tab.id, {
                 action: 'extractContent',
                 characterLimit: chatbot.characterLimit || 20000,
                 promptLength: includePrompt ? prompt.content.length : 0,
                 algorithm: settings.extractionAlgorithm || 1
-            });
+            }, { frameId: 0 });
 
             if (response && response.success) {
                 let finalText = response.content;
@@ -112,6 +113,75 @@ async function copyToClipboard(text) {
         // Fallback: handled in popup
         console.log('Clipboard operation will be handled by popup');
     }
+}
+
+/**
+ * Shared frame-extraction helper.
+ * Sends extractContent to specific frameIds and merges results.
+ * Returns { success: true, content } if any frame yielded content,
+ * or { success: false, error } if every frame failed.
+ *
+ * IMPORTANT: This is a plain async function — both the extractFromTabs
+ * and extractFromFrames message handlers call it directly. A service worker
+ * cannot send chrome.runtime.sendMessage to itself, so we must NOT route
+ * through the message listener.
+ */
+async function doExtractFromFrames({ tabId, iframeSource, frameTargets, characterLimit, algorithm }) {
+    const results = [];
+    const msgOpts = { action: 'extractContent', characterLimit, promptLength: 0, algorithm };
+
+    // ── Main frame (frameId 0) ────────────────────────────────────────────────
+    if (iframeSource === 'main' || iframeSource === 'both') {
+        try {
+            const resp = await chrome.tabs.sendMessage(tabId, msgOpts, { frameId: 0 });
+            if (resp?.success && resp.content) {
+                results.push(
+                    iframeSource === 'both'
+                        ? `=== Main Document ===\n${resp.content}`
+                        : resp.content
+                );
+            }
+        } catch (e) {
+            console.warn('[WCE] main frame extraction failed:', e);
+        }
+    }
+
+    // ── Iframe frames ─────────────────────────────────────────────────────────
+    if (iframeSource === 'iframes' || iframeSource === 'both') {
+        let targetsToUse = (frameTargets && frameTargets.length > 0) ? frameTargets : [];
+
+        // Default: use first available iframe when none explicitly selected
+        if (targetsToUse.length === 0) {
+            try {
+                const allFrames = await chrome.webNavigation.getAllFrames({ tabId });
+                const first = (allFrames || []).find(f => f.frameId !== 0);
+                if (first) targetsToUse = [{ frameId: first.frameId, label: 'main > iframe-0', url: first.url }];
+            } catch (_) {}
+        }
+
+        for (const target of targetsToUse) {
+            try {
+                const resp = await chrome.tabs.sendMessage(
+                    tabId, msgOpts, { frameId: target.frameId }
+                );
+                if (resp?.success && resp.content) {
+                    // Only push real content — never push error strings into results
+                    results.push(`=== Frame: ${target.label} (${target.url || ''}) ===\n${resp.content}`);
+                } else {
+                    console.warn(`[WCE] frame ${target.frameId} returned no content`);
+                }
+            } catch (e) {
+                // Frame may not have the content script yet (e.g. cross-origin that
+                // hadn't fully loaded when all_frames injection ran). Skip silently.
+                console.warn(`[WCE] frame ${target.frameId} (${target.label}) not reachable:`, e.message);
+            }
+        }
+    }
+
+    if (results.length === 0) {
+        return { success: false, error: 'No content could be extracted from the selected frames.' };
+    }
+    return { success: true, content: results.join('\n\n') };
 }
 
 // Message handler for various operations
@@ -176,40 +246,138 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true;
     } else if (request.action === 'extractFromTabs') {
-        const { tabIds, characterLimit, algorithm } = request;
-        
+        const { tabIds, characterLimit, algorithm, iframeSource, frameTargets } = request;
+        const useIframes = iframeSource && iframeSource !== 'main';
+
         Promise.all(tabIds.map(async (tabId) => {
             try {
-                // Get tab info first so we have the title regardless of extractor response
                 const tab = await chrome.tabs.get(tabId);
                 const tabTitle = tab.title || `Tab ${tabId}`;
 
-                // Ensure extractor is injected
+                // Ensure content script is injected
                 await chrome.scripting.executeScript({
                     target: { tabId },
                     files: ['content/extractor.js']
                 });
-                
-                // Extract
-                const response = await chrome.tabs.sendMessage(tabId, {
-                    action: 'extractContent',
-                    characterLimit,
-                    promptLength: 0,
-                    algorithm
-                });
-                
-                if (response && response.success) {
-                    return `--- Start: ${tabTitle} ---\n${response.content}\n--- End: ${tabTitle} ---`;
+
+                let content = null;
+
+                if (useIframes) {
+                    // Call doExtractFromFrames directly — never via sendMessage to self
+                    const result = await doExtractFromFrames({
+                        tabId, iframeSource, frameTargets: frameTargets || [],
+                        characterLimit, algorithm
+                    });
+                    if (result.success) content = result.content;
+                } else {
+                    // Main frame only — always use frameId:0 to avoid iframe responses
+                    const response = await chrome.tabs.sendMessage(
+                        tabId,
+                        { action: 'extractContent', characterLimit, promptLength: 0, algorithm },
+                        { frameId: 0 }
+                    );
+                    if (response?.success && response.content) content = response.content;
                 }
-                return `--- Failed to extract from: ${tabTitle} ---`;
+
+                if (content) {
+                    return tabIds.length > 1
+                        ? `--- Start: ${tabTitle} ---\n${content}\n--- End: ${tabTitle} ---`
+                        : content;
+                }
+                return null; // signal failure — filtered out below
             } catch (err) {
-                console.error('Failed to extract from tab', tabId, err);
-                return `--- Failed to extract from Tab ${tabId} ---`;
+                console.error('[WCE] extractFromTabs failed for tab', tabId, err);
+                return null;
             }
         })).then(results => {
-            sendResponse({ success: true, content: results.join('\n\n') });
+            const valid = results.filter(r => r !== null);
+            if (valid.length > 0) {
+                sendResponse({ success: true, content: valid.join('\n\n') });
+            } else {
+                sendResponse({ success: false, error: 'Content extraction failed for all selected tabs.' });
+            }
         });
+        return true;
+
+    } else if (request.action === 'getIframesForTab') {
+        // Returns a hierarchical list of all frames in a tab using webNavigation.
+        // Each frame has a stable frameId usable with chrome.tabs.sendMessage({ frameId }).
+        const { tabId } = request;
+        chrome.webNavigation.getAllFrames({ tabId }).then(frames => {
+            if (!frames || frames.length <= 1) {
+                // Only the main frame (frameId 0) — no iframes
+                sendResponse({ success: true, frames: [] });
+                return;
+            }
+
+            // Build a map of frameId → enriched frame node
+            const frameMap = {};
+            frames.forEach(f => {
+                frameMap[f.frameId] = {
+                    frameId: f.frameId,
+                    parentFrameId: f.parentFrameId,
+                    url: f.url,
+                    label: '',
+                    depth: 0,
+                    children: []
+                };
+            });
+
+            // Wire parent→child relationships
+            const subFrameRoots = [];
+            frames.forEach(f => {
+                if (f.frameId === 0) return; // skip main frame itself
+                const parent = frameMap[f.parentFrameId];
+                if (parent) {
+                    parent.children.push(frameMap[f.frameId]);
+                } else {
+                    subFrameRoots.push(frameMap[f.frameId]);
+                }
+            });
+
+            // Assign hierarchical labels recursively
+            const iframeCounter = {};
+            function assignLabels(node, parentLabel, depth) {
+                const key = parentLabel || '__root__';
+                const idx = iframeCounter[key] = (iframeCounter[key] || 0);
+                iframeCounter[key]++;
+                const seg = `iframe-${idx}`;
+                node.label = parentLabel ? `${parentLabel} > ${seg}` : `main > ${seg}`;
+                node.depth = depth;
+                node.children.forEach(child => assignLabels(child, node.label, depth + 1));
+            }
+            const mainChildren = frameMap[0] ? frameMap[0].children : subFrameRoots;
+            mainChildren.forEach(child => assignLabels(child, 'main', 1));
+
+            // Flatten to array (DFS order preserves visual hierarchy)
+            const flat = [];
+            function flatten(node) {
+                // Omit internal children array from response (not serialisable cleanly)
+                flat.push({ frameId: node.frameId, label: node.label, url: node.url, depth: node.depth });
+                node.children.forEach(flatten);
+            }
+            mainChildren.forEach(flatten);
+
+            sendResponse({ success: true, frames: flat });
+        }).catch(err => {
+            console.error('[WCE] getIframesForTab error:', err);
+            sendResponse({ success: false, frames: [] });
+        });
+        return true;
+
+    } else if (request.action === 'extractFromFrames') {
+        // Thin handler — delegates to the shared doExtractFromFrames helper.
+        // Keeping logic in a standalone function avoids the service-worker
+        // self-messaging anti-pattern used by extractFromTabs.
+        const { tabId, iframeSource, frameTargets, characterLimit, algorithm } = request;
+        doExtractFromFrames({ tabId, iframeSource, frameTargets, characterLimit, algorithm })
+            .then(result => sendResponse(result))
+            .catch(err => {
+                console.error('[WCE] extractFromFrames error:', err);
+                sendResponse({ success: false, error: String(err) });
+            });
         return true;
     }
     return true;
 });
+

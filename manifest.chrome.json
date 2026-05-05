@@ -8,7 +8,8 @@
         "clipboardWrite",
         "storage",
         "scripting",
-        "tabs"
+        "tabs",
+        "webNavigation"
     ],
     "host_permissions": [
         "<all_urls>"
@@ -34,6 +35,8 @@
             "matches": [
                 "<all_urls>"
             ],
+            "all_frames": true,
+            "match_about_blank": true,
             "css": [
                 "content/sidebar.css",
                 "content/chatbot_injector.css"
