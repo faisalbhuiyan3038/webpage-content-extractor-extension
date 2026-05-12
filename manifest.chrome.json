@@ -1,7 +1,7 @@
 {
     "manifest_version": 3,
     "name": "Extract & Ask: AI Workflow Tool",
-    "version": "1.0.1",
+    "version": "1.0.3",
     "description": "Extract web content from any tab, prepend AI prompts, and paste instantly into ChatGPT,Gemini etc. Local processing, zero tracking.",
     "permissions": [
         "activeTab",
