@@ -1,17 +1,15 @@
 {
     "manifest_version": 3,
-    "name": "Extract & Ask: AI Workflow Tool",
-    "version": "1.0.3",
-    "description": "Extract web content from any tab, prepend AI prompts, and paste instantly into ChatGPT,Gemini etc. Local processing, zero tracking.",
+    "name": "Webpage Content Extractor / Chat",
+    "version": "1.0.4",
+    "description": "Extract text from any webpage and chat with ChatGPT, Claude, Gemini etc. Free webpage chat tool with custom prompts.",
     "permissions": [
         "activeTab",
         "clipboardWrite",
         "storage",
         "scripting",
         "tabs",
-        "webNavigation"
-    ],
-    "host_permissions": [
+        "webNavigation",
         "<all_urls>"
     ],
     "action": {
@@ -28,7 +26,9 @@
         "open_in_tab": true
     },
     "background": {
-        "service_worker": "background.js"
+        "scripts": [
+            "background.js"
+        ]
     },
     "content_scripts": [
         {
@@ -65,5 +65,15 @@
         "32": "icons/icon32.png",
         "48": "icons/icon48.png",
         "128": "icons/icon128.png"
+    },
+    "browser_specific_settings": {
+        "gecko": {
+            "id": "webpage-content-extractor@faisalbhuiyan.com",
+            "data_collection_permissions": {
+                "required": [
+                    "none"
+                ]
+            }
+        }
     }
 }

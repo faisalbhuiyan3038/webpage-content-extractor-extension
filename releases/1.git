@@ -1,0 +1,376 @@
+# IFrame Content Extraction Feature (Revised)
+
+## Overview
+
+The extension currently only extracts content from the main `document`. This plan adds full iframe-aware extraction using the native extension platform approach: `all_frames: true` injects the extractor content script into **every frame** (same-origin and cross-origin alike), and `chrome.webNavigation.getAllFrames()` provides the full frame hierarchy with stable `frameId`s. The background then targets specific frames via `chrome.tabs.sendMessage(tabId, msg, { frameId })`.
+
+This is architecturally cleaner than trying to access `iframe.contentDocument` from the parent frame and avoids any same-origin/cross-origin distinction at the extraction layer.
+
+---
+
+## Proposed Changes
+
+### 1 — Manifests — Enable all-frames injection
+
+#### [MODIFY] [manifest.chrome.json](file:///m:/.systemfile/webpage-content-extractor-extension/manifest.chrome.json)
+
+Two changes:
+1. Add `"webNavigation"` to `"permissions"` (needed for `chrome.webNavigation.getAllFrames`).
+2. Add `"all_frames": true` and `"match_about_blank": true` to the `content_scripts` entry.
+
+```diff
+ "permissions": [
+     "activeTab",
+     "clipboardWrite",
+     "storage",
+     "scripting",
+-    "tabs"
++    "tabs",
++    "webNavigation"
+ ],
+ 
+ "content_scripts": [{
+     "matches": ["<all_urls>"],
++    "all_frames": true,
++    "match_about_blank": true,
+     "css": ["content/sidebar.css", "content/chatbot_injector.css"],
+     "js": ["content/extractor.js", "content/sidebar.js", "content/chatbot_injector.js"],
+     "run_at": "document_idle"
+ }]
+```
+
+#### [MODIFY] [manifest.firefox.json](file:///m:/.systemfile/webpage-content-extractor-extension/manifest.firefox.json)
+
+Same two changes as above (Firefox supports both `all_frames` and `webNavigation`).
+
+> [!NOTE]
+> `sidebar.js` and `chatbot_injector.js` will also run in sub-frames with `all_frames: true`. They already guard against double injection (`if (document.getElementById('wce-ai-sidebar-container')) return;`), and the chatbot injector only activates if the current URL matches a known chatbot. Neither will cause issues in iframes, but we should add a quick `window === window.top` guard to `sidebar.ts` and `chatbot_injector.ts` to skip injection entirely when running inside a sub-frame — keeping things clean.
+
+---
+
+### 2 — `content/extractor.ts` — Add `getIframes` message handler
+
+#### [MODIFY] [extractor.ts](file:///m:/.systemfile/webpage-content-extractor-extension/content/extractor.ts)
+
+**No need for document-adapter complexity.** Because each frame runs its own instance of the content script with its own `document`, the existing three algorithms work unchanged on every frame. The only changes needed are:
+
+**a) New message action: `getFrameInfo`**
+
+Each frame's extractor responds with its own identity when asked:
+
+```ts
+if (request.action === 'getFrameInfo') {
+    sendResponse({
+        success: true,
+        title: document.title,
+        url: window.location.href
+    });
+    return true;
+}
+```
+
+This lets the background cross-reference `webNavigation` frame data with live page titles.
+
+**b) Extend `extractContent` handler**
+
+The existing handler already works as-is — it extracts from its own `document`. No changes needed to the extraction logic itself.
+
+**c) Add `iframeSource` awareness (optional label in output)**
+
+When `request.iframeSource` is present and `!== 'main'`, the extractor can prefix its output with a context header like `=== Frame: [title] ([url]) ===` so the caller can assemble a merged result. The logic for combining results lives in the background, not here.
+
+---
+
+### 3 — `background.js` — Frame discovery + targeted extraction
+
+#### [MODIFY] [background.js](file:///m:/.systemfile/webpage-content-extractor-extension/background.js)
+
+**a) New handler: `getIframesForTab`**
+
+```js
+} else if (request.action === 'getIframesForTab') {
+    const { tabId } = request;
+    try {
+        // Get all frames in the tab (requires webNavigation permission)
+        const frames = await chrome.webNavigation.getAllFrames({ tabId });
+        if (!frames) { sendResponse({ success: true, frames: [] }); return true; }
+
+        // Build a map of frameId → frame info
+        const frameMap = {};
+        frames.forEach(f => {
+            frameMap[f.frameId] = {
+                frameId: f.frameId,
+                parentFrameId: f.parentFrameId,
+                url: f.url,
+                label: '',       // computed below
+                path: [],        // computed below
+                children: []
+            };
+        });
+
+        // Build hierarchy (parentFrameId === -1 is the main frame)
+        const roots = [];
+        frames.forEach(f => {
+            if (f.parentFrameId === -1 || f.parentFrameId === 0) {
+                if (f.frameId === 0) return; // skip main frame itself
+                roots.push(frameMap[f.frameId]);
+            } else {
+                const parent = frameMap[f.parentFrameId];
+                if (parent) parent.children.push(frameMap[f.frameId]);
+            }
+        });
+
+        // Assign hierarchical labels recursively
+        let iframeCounter = {};
+        function assignLabels(node, parentLabel) {
+            const idx = iframeCounter[parentLabel] = (iframeCounter[parentLabel] || 0);
+            iframeCounter[parentLabel]++;
+            const seg = `iframe-${idx}`;
+            node.label = parentLabel ? `${parentLabel} > ${seg}` : seg;
+            node.path = parentLabel ? [...parentLabel.split(' > '), seg] : [seg];
+            node.children.forEach(child => assignLabels(child, node.label));
+        }
+        roots.forEach(r => assignLabels(r, 'main'));
+
+        // Flatten back to a list for easy consumption
+        const flat = [];
+        function flatten(node) { flat.push(node); node.children.forEach(flatten); }
+        roots.forEach(flatten);
+
+        sendResponse({ success: true, frames: flat });
+    } catch (err) {
+        console.error('[WCE] getIframesForTab error:', err);
+        sendResponse({ success: false, frames: [] });
+    }
+    return true;
+```
+
+**b) New handler: `extractFromFrames`**
+
+Used by both the popup and the injector. Extracts from a set of `{ tabId, frameId }` targets and assembles a merged result:
+
+```js
+} else if (request.action === 'extractFromFrames') {
+    const { tabId, frameTargets, characterLimit, algorithm, iframeSource } = request;
+    // frameTargets: Array<{ frameId, label }>
+    // iframeSource: 'main' | 'iframes' | 'both'
+
+    const results = [];
+
+    // Main frame (frameId = 0)
+    if (iframeSource === 'main' || iframeSource === 'both') {
+        try {
+            const resp = await chrome.tabs.sendMessage(tabId,
+                { action: 'extractContent', characterLimit, promptLength: 0, algorithm },
+                { frameId: 0 }
+            );
+            if (resp?.success) {
+                results.push(iframeSource === 'both'
+                    ? `=== Main Document ===\n${resp.content}`
+                    : resp.content);
+            }
+        } catch (e) { console.warn('[WCE] main frame extraction failed', e); }
+    }
+
+    // Selected iframe frames
+    if (iframeSource === 'iframes' || iframeSource === 'both') {
+        for (const target of frameTargets) {
+            try {
+                const resp = await chrome.tabs.sendMessage(tabId,
+                    { action: 'extractContent', characterLimit, promptLength: 0, algorithm },
+                    { frameId: target.frameId }
+                );
+                if (resp?.success) {
+                    results.push(`=== Frame: ${target.label} ===\n${resp.content}`);
+                }
+            } catch (e) {
+                console.warn(`[WCE] frame ${target.frameId} extraction failed`, e);
+                results.push(`=== Frame: ${target.label} ===\n[Extraction failed]`);
+            }
+        }
+    }
+
+    sendResponse({ success: true, content: results.join('\n\n') });
+    return true;
+```
+
+**c) Update `extractFromTabs` handler**
+
+Forward `iframeSource` and `selectedFrameTargets` fields so the injector can also use the frame-targeted extraction path.
+
+---
+
+### 4 — `popup/popup.html` — New iframe UI controls
+
+#### [MODIFY] [popup.html](file:///m:/.systemfile/webpage-content-extractor-extension/popup/popup.html)
+
+Add two new `form-group` blocks **below** the Algorithm selector:
+
+```html
+<!-- Extract From (shown only when current tab has iframes) -->
+<div class="form-group" id="iframe-source-group" style="display:none;">
+  <label for="iframe-source-select">Extract From</label>
+  <select id="iframe-source-select" class="select-input">
+    <option value="main">Main Document Only</option>
+    <option value="iframes">Iframes Only</option>
+    <option value="both">Main + Iframes</option>
+  </select>
+</div>
+
+<!-- Iframe Picker (shown when source = iframes or both) -->
+<div class="form-group" id="iframe-picker-group" style="display:none;">
+  <label style="margin-bottom:5px;display:block;">Select Iframes</label>
+  <div id="iframe-picker-list"
+       style="max-height:130px;overflow-y:auto;border:1px solid var(--border-color);
+              border-radius:4px;padding:4px;background:var(--surface-color);">
+    <div style="font-size:12px;color:var(--text-muted);padding:5px;">Loading…</div>
+  </div>
+  <div style="font-size:11px;color:var(--text-muted);margin-top:3px;">
+    No selection = use first iframe
+  </div>
+</div>
+```
+
+---
+
+### 5 — `popup/popup.js` — Iframe UI logic
+
+#### [MODIFY] [popup.js](file:///m:/.systemfile/webpage-content-extractor-extension/popup/popup.js)
+
+**a) Discover iframes for the active tab on load**
+
+```js
+// After currentTab is resolved:
+const iframeResp = await chrome.runtime.sendMessage({
+    action: 'getIframesForTab', tabId: currentTab.id
+});
+const availableFrames = iframeResp?.frames || [];
+
+if (availableFrames.length > 0) {
+    document.getElementById('iframe-source-group').style.display = 'block';
+    populateIframePicker(availableFrames);
+}
+```
+
+**b) `populateIframePicker(frames)`**
+
+Renders a checkbox list. Depth is indicated by `padding-left: ${(path.length - 1) * 14}px`:
+
+```
+□  main > iframe-0  (youtube.com)
+  □  main > iframe-0 > iframe-0  (ads.example.com)
+□  main > iframe-1  (twitter.com)
+```
+
+Each checkbox `value` = `JSON.stringify({ frameId, label })`.
+
+**c) Toggle picker visibility**
+
+```js
+iframeSourceSelect.addEventListener('change', () => {
+    const v = iframeSourceSelect.value;
+    iframePickerGroup.style.display = (v === 'iframes' || v === 'both') ? 'block' : 'none';
+});
+```
+
+**d) Wire extraction to new `extractFromFrames` handler**
+
+In `handleExtract`, replace the per-tab `extractContent` message with:
+
+```js
+const iframeSource = iframeSourceSelect?.value || 'main';
+const selectedFrameTargets = iframeSource !== 'main'
+    ? [...iframePickerList.querySelectorAll('input:checked')]
+        .map(cb => JSON.parse(cb.value))
+    : [];
+
+// Default: use first frame if none selected and source !== 'main'
+const frameTargets = (selectedFrameTargets.length === 0 && iframeSource !== 'main')
+    ? [availableFrames[0]]
+    : selectedFrameTargets;
+
+const response = await chrome.runtime.sendMessage({
+    action: 'extractFromFrames',
+    tabId: tab.id,
+    frameTargets,
+    characterLimit: chatbot.characterLimit || 20000,
+    algorithm: algoToUse,
+    iframeSource
+});
+```
+
+**e) Persist `iframeSource` in settings**
+
+---
+
+### 6 — `content/chatbot_injector.ts` — Source selector in popover
+
+#### [MODIFY] [chatbot_injector.ts](file:///m:/.systemfile/webpage-content-extractor-extension/content/chatbot_injector.ts)
+
+In `openTabsPopover`, add a small "Extract From" radio group above the footer using existing `wce-pop-item` styles:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Extract From
+◉ Main Document   ○ Iframes   ○ Both
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+When clicking **Extract & Insert**, read the selected radio value and pass `iframeSource` (and empty `frameTargets` for default-first-frame behavior) in the `extractFromTabs` / `extractFromFrames` message to background.
+
+> [!NOTE]
+> For the injector, we use the "first available iframe" default (no per-tab iframe picker) since showing a per-frame picker for multiple simultaneously-selected tabs would be overly complex. This is the right tradeoff for v1.
+
+---
+
+### 7 — `content/sidebar.ts` & `content/chatbot_injector.ts` — Sub-frame guard
+
+#### [MODIFY] [sidebar.ts](file:///m:/.systemfile/webpage-content-extractor-extension/content/sidebar.ts)
+
+Add at the very top of the IIFE:
+
+```ts
+if (window !== window.top) return; // Don't run sidebar inside iframes
+```
+
+#### [MODIFY] [chatbot_injector.ts](file:///m:/.systemfile/webpage-content-extractor-extension/content/chatbot_injector.ts)
+
+Add at the bootstrap section:
+
+```ts
+if (window !== window.top) { /* skip */ return; }
+```
+
+This prevents the sidebar and injector UI from being injected into every sub-frame now that `all_frames: true` is set.
+
+---
+
+### 8 — `shared/defaults.js`
+
+#### [MODIFY] [defaults.js](file:///m:/.systemfile/webpage-content-extractor-extension/shared/defaults.js)
+
+```diff
+ export const DEFAULT_SETTINGS = {
+     ...
+     extractionAlgorithm: 1,
++    iframeSource: 'main',
+     sidebarEnabled: true,
+     ...
+ };
+```
+
+---
+
+## Verification Plan
+
+| Test | Expected |
+|---|---|
+| Page with no iframes | `iframe-source-group` stays hidden; extraction identical to before |
+| Page with same-origin iframe | Group appears; `iframes` mode extracts iframe content correctly |
+| Page with cross-origin iframe (e.g. YouTube embed) | Group appears; cross-origin frame is listed; extraction works because content script is injected into the iframe |
+| Nested iframes (2 levels) | Hierarchical labels render correctly (`main > iframe-0 > iframe-0`) |
+| `both` mode | Output has `=== Main Document ===` and `=== Frame: ... ===` sections |
+| Default (no iframe selected) | First frame in list is used automatically |
+| Sidebar not injected into sub-frames | No `wce-ai-sidebar-container` appears inside iframe DOM |
+| Chatbot injector — Extract & Insert with `iframes` | Content from first iframe inserted into chatbot input |
+| Firefox build | Same behaviour; `webNavigation` permission accepted |

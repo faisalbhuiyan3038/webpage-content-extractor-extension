@@ -21,79 +21,81 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 });
 
 // Handle keyboard shortcuts
-chrome.commands.onCommand.addListener(async (command) => {
-    if (command === 'extract-and-copy' || command === 'extract-with-prompt') {
-        // Get active tab
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab) return;
+if (chrome.commands) {
+    chrome.commands.onCommand.addListener(async (command) => {
+        if (command === 'extract-and-copy' || command === 'extract-with-prompt') {
+            // Get active tab
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (!tab) return;
 
-        // Get settings
-        const result = await chrome.storage.sync.get(['settings', 'customPrompts']);
-        const settings = result.settings || {
-            selectedPromptId: 'summary',
-            selectedChatbotId: 'chatgpt',
-            includePrompt: true,
-            openChatbot: true,
-            extractionAlgorithm: 1
-        };
+            // Get settings
+            const result = await chrome.storage.sync.get(['settings', 'customPrompts']);
+            const settings = result.settings || {
+                selectedPromptId: 'summary',
+                selectedChatbotId: 'chatgpt',
+                includePrompt: true,
+                openChatbot: true,
+                extractionAlgorithm: 1
+            };
 
-        // Get prompts
-        const DEFAULT_PROMPTS = [
-            { id: 'none', name: 'No Prompt (Raw Text Only)', content: '', isDefault: true },
-            { id: 'summary', name: 'Summary - Short', content: 'Please summarize the following text in under 100 words...', isDefault: true }
-        ];
-        const customPrompts = result.customPrompts || [];
-        const allPrompts = [...DEFAULT_PROMPTS, ...customPrompts];
+            // Get prompts
+            const DEFAULT_PROMPTS = [
+                { id: 'none', name: 'No Prompt (Raw Text Only)', content: '', isDefault: true },
+                { id: 'summary', name: 'Summary - Short', content: 'Please summarize the following text in under 100 words...', isDefault: true }
+            ];
+            const customPrompts = result.customPrompts || [];
+            const allPrompts = [...DEFAULT_PROMPTS, ...customPrompts];
 
-        // Get chatbots
-        const DEFAULT_CHATBOTS = {
-            'chatgpt': { id: 'chatgpt', name: 'ChatGPT', url: 'https://chatgpt.com', characterLimit: 40000 }
-        };
-        const customChatbots = (await chrome.storage.sync.get(['customChatbots'])).customChatbots || {};
-        const allChatbots = { ...DEFAULT_CHATBOTS, ...customChatbots };
+            // Get chatbots
+            const DEFAULT_CHATBOTS = {
+                'chatgpt': { id: 'chatgpt', name: 'ChatGPT', url: 'https://chatgpt.com', characterLimit: 40000 }
+            };
+            const customChatbots = (await chrome.storage.sync.get(['customChatbots'])).customChatbots || {};
+            const allChatbots = { ...DEFAULT_CHATBOTS, ...customChatbots };
 
-        // Find selected prompt and chatbot
-        const prompt = allPrompts.find(p => p.id === settings.selectedPromptId) || allPrompts[0];
-        const chatbot = allChatbots[settings.selectedChatbotId] || allChatbots['chatgpt'];
+            // Find selected prompt and chatbot
+            const prompt = allPrompts.find(p => p.id === settings.selectedPromptId) || allPrompts[0];
+            const chatbot = allChatbots[settings.selectedChatbotId] || allChatbots['chatgpt'];
 
-        const includePrompt = command === 'extract-with-prompt' ? settings.includePrompt : false;
+            const includePrompt = command === 'extract-with-prompt' ? settings.includePrompt : false;
 
-        try {
-            // Inject content script if needed and extract
-            await chrome.scripting.executeScript({
-                target: { tabId: tab.id },
-                files: ['content/extractor.js']
-            });
+            try {
+                // Inject content script if needed and extract
+                await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['content/extractor.js']
+                });
 
-            // Send extraction request — always target frameId 0 (main frame)
-            // With all_frames:true, omitting frameId would let any iframe respond first.
-            const response = await chrome.tabs.sendMessage(tab.id, {
-                action: 'extractContent',
-                characterLimit: chatbot.characterLimit || 20000,
-                promptLength: includePrompt ? prompt.content.length : 0,
-                algorithm: settings.extractionAlgorithm || 1
-            }, { frameId: 0 });
+                // Send extraction request — always target frameId 0 (main frame)
+                // With all_frames:true, omitting frameId would let any iframe respond first.
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'extractContent',
+                    characterLimit: chatbot.characterLimit || 20000,
+                    promptLength: includePrompt ? prompt.content.length : 0,
+                    algorithm: settings.extractionAlgorithm || 1
+                }, { frameId: 0 });
 
-            if (response && response.success) {
-                let finalText = response.content;
+                if (response && response.success) {
+                    let finalText = response.content;
 
-                if (includePrompt && prompt.content) {
-                    finalText = `${prompt.content}\n\n---\n\nPage Content:\n${response.content}`;
+                    if (includePrompt && prompt.content) {
+                        finalText = `${prompt.content}\n\n---\n\nPage Content:\n${response.content}`;
+                    }
+
+                    // Copy to clipboard using offscreen document or fallback
+                    await copyToClipboard(finalText);
+
+                    // Open chatbot if enabled
+                    if (settings.openChatbot) {
+                        chrome.tabs.create({ url: chatbot.url });
+                    }
                 }
-
-                // Copy to clipboard using offscreen document or fallback
-                await copyToClipboard(finalText);
-
-                // Open chatbot if enabled
-                if (settings.openChatbot) {
-                    chrome.tabs.create({ url: chatbot.url });
-                }
+            } catch (error) {
+                console.error('Extraction failed:', error);
             }
-        } catch (error) {
-            console.error('Extraction failed:', error);
         }
-    }
-});
+    });
+}
 
 // Copy to clipboard helper
 async function copyToClipboard(text) {
@@ -234,16 +236,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
         return true;
     } else if (request.action === 'getOpenTabs') {
-        chrome.tabs.query({}).then(tabs => {
-            // Filter out the sender tab
-            const otherTabs = tabs.filter(tab => !sender.tab || tab.id !== sender.tab.id).map(tab => ({
-                id: tab.id,
-                title: tab.title,
-                url: tab.url,
-                favicon: tab.favIconUrl
-            }));
-            sendResponse({ success: true, tabs: otherTabs });
-        });
+        (async () => {
+            try {
+                console.log('[WCE] getOpenTabs: querying tabs. sender.tab?.id:', sender.tab?.id);
+                const tabs = await chrome.tabs.query({});
+                console.log('[WCE] getOpenTabs: tabs.query returned', tabs.length);
+                const senderTabId = sender.tab?.id;
+                const validTabs = tabs.filter(tab => {
+                    if (senderTabId != null && tab.id === senderTabId) return false;
+                    if (!tab.url) return false;
+                    if (tab.url.startsWith('chrome://') ||
+                        tab.url.startsWith('chrome-extension://') ||
+                        tab.url.startsWith('about:') ||
+                        tab.url.startsWith('moz-extension://')) return false;
+                    return true;
+                });
+                console.log('[WCE] getOpenTabs: validTabs', validTabs.length);
+                const otherTabs = validTabs.map(tab => ({
+                    id: tab.id,
+                    title: tab.title || 'Untitled Tab',
+                    url: tab.url,
+                    favicon: tab.favIconUrl || ''
+                }));
+                sendResponse({ success: true, tabs: otherTabs });
+            } catch (err) {
+                console.error('[WCE] getOpenTabs error:', err);
+                sendResponse({ success: false, tabs: [], error: String(err) });
+            }
+        })();
         return true;
     } else if (request.action === 'extractFromTabs') {
         const { tabIds, characterLimit, algorithm, iframeSource, frameTargets } = request;

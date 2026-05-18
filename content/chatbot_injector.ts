@@ -500,7 +500,10 @@ class PromptInjector {
         try {
             const r = await chrome.runtime.sendMessage({ action: 'getOpenTabs' });
             this.openTabs = r?.success ? r.tabs : [];
-        } catch { this.openTabs = []; }
+        } catch (e) {
+            console.error('[WCE] fetchOpenTabs failed:', e);
+            this.openTabs = [];
+        }
     }
 
     /** Appends text to the chatbot input without overwriting existing content */
