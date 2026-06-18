@@ -206,7 +206,7 @@
       <path d="M13 13l6 6"/>
     </svg>
     <span class="${PREFIX}-banner-text">
-      <strong>Decant Picker</strong> — ${isMobile ? 'Tap an element' : 'Click an element'} to extract it. ${isMobile ? '' : 'Press <kbd>Esc</kbd> to cancel.'}
+      <strong>Web Scraper Picker</strong> — ${isMobile ? 'Tap an element' : 'Click an element'} to extract it. ${isMobile ? '' : 'Press <kbd>Esc</kbd> to cancel.'}
     </span>
     ${isMobile ? `<button class="${PREFIX}-banner-btn ${PREFIX}-banner-btn-primary" id="${PREFIX}-confirm" style="display: none; margin-right: 8px;">Confirm</button>` : ''}
     <button class="${PREFIX}-banner-btn" id="${PREFIX}-cancel">Cancel</button>

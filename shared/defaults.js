@@ -213,5 +213,5 @@ export const ALGORITHMS = {
     1: { id: 1, name: "Text Extraction (Lightweight)" },
     2: { id: 2, name: "Optimized Content (Includes YT Transcript)" },
     3: { id: 3, name: "Full Content Extraction (Readability)" },
-    4: { id: 4, name: "Decant Algorithm (Advanced)" }
+    4: { id: 4, name: "Web Scraper Algorithm (Advanced)" }
 };
