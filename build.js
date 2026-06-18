@@ -20,7 +20,9 @@ const bundledJsFiles = [
 
 // JS files to minify without bundling (standalone scripts)
 const standaloneJsFiles = [
-    'background.js'
+    'background.js',
+    'content/dom-picker.js',
+    'offscreen.js'
 ];
 
 // CSS files to minify
@@ -34,7 +36,8 @@ const cssFiles = [
 // HTML files to minify
 const htmlFiles = [
     'popup/popup.html',
-    'options/options.html'
+    'options/options.html',
+    'offscreen.html'
 ];
 
 async function build() {

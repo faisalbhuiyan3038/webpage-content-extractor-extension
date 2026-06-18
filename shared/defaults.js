@@ -197,7 +197,12 @@ export const DEFAULT_SETTINGS = {
     sidebarEnabled: true,
     sidebarPosition: 'right',
     sidebarShowNames: false,
-    injectorPosition: 'inside'
+    injectorPosition: 'inside',
+    decantFormat: 'markdown',
+    decantIncludeImages: true,
+    decantDetectTables: true,
+    decantSmartExtract: true,
+    decantFullPage: false
 };
 
 // Default Preferred Chatbots
@@ -207,5 +212,6 @@ export const DEFAULT_PREFERRED_CHATBOTS = ['chatgpt', 'claude', 'gemini'];
 export const ALGORITHMS = {
     1: { id: 1, name: "Text Extraction (Lightweight)" },
     2: { id: 2, name: "Optimized Content (Includes YT Transcript)" },
-    3: { id: 3, name: "Full Content Extraction (Readability)" }
+    3: { id: 3, name: "Full Content Extraction (Readability)" },
+    4: { id: 4, name: "Decant Algorithm (Advanced)" }
 };

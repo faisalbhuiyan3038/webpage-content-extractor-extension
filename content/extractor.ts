@@ -8,9 +8,10 @@
  *   3 = Full Content Extraction — Readability + html-to-text pipeline
  */
 
-type ExtractionAlgorithm = 1 | 2 | 3;
+type ExtractionAlgorithm = 1 | 2 | 3 | 4;
 import { Readability, isProbablyReaderable } from '@mozilla/readability';
 import { convert } from 'html-to-text';
+import { extract as decantExtract } from '../shared/decant/parser.js';
 
 // ═══════════════════════════════════════════════════════
 // SHARED CONFIG
@@ -41,7 +42,14 @@ export interface ExtractionResult {
  */
 export async function extractPageContent(
   algorithm: ExtractionAlgorithm,
-  options?: { characterLimit?: number; promptLength?: number }
+  options?: { 
+    characterLimit?: number; 
+    promptLength?: number;
+    decantOptions?: any;
+    html?: string;
+    url?: string;
+    title?: string;
+  }
 ): Promise<ExtractionResult> {
   console.log(`[BrowserBot] Starting page extraction using Algorithm ${algorithm}`);
   const charLimit = options?.characterLimit || TRUNC_CONFIG.characterLimit;
@@ -55,6 +63,8 @@ export async function extractPageContent(
       return await extractAlgorithm2(maxContentLength);
     case 3:
       return await extractAlgorithm3();
+    case 4:
+      return await extractAlgorithm4(options);
     default:
       return extractAlgorithm1(maxContentLength);
   }
@@ -685,6 +695,70 @@ function parseWithReadability(ReadabilityClass: any): any {
   return new ReadabilityClass(docClone).parse();
 }
 
+async function extractAlgorithm4(options?: {
+  characterLimit?: number;
+  promptLength?: number;
+  decantOptions?: any;
+  html?: string;
+  url?: string;
+  title?: string;
+}): Promise<ExtractionResult> {
+  const selection = window.getSelection()?.toString()?.trim();
+  let html = options?.html;
+  let url = options?.url || window.location.href;
+  let title = options?.title || document.title;
+
+  if (!html) {
+    if (selection) {
+      const safe = selection.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      html = `<html><body><article>${safe}</article></body></html>`;
+    } else {
+      const docClone = document.cloneNode(true);
+      const base = window.location.href;
+      docClone.querySelectorAll('img[src]').forEach((img: any) => {
+        try {
+          img.src = new URL(img.getAttribute('src'), base).href;
+        } catch { /* skip */ }
+      });
+      docClone.querySelectorAll('img[data-src]').forEach((img: any) => {
+        try {
+          img.setAttribute('data-src', new URL(img.getAttribute('data-src'), base).href);
+        } catch { /* skip */ }
+      });
+      docClone.querySelectorAll('a[href]').forEach((a: any) => {
+        try {
+          const href = a.getAttribute('href');
+          if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+            a.href = new URL(href, base).href;
+          }
+        } catch { /* skip */ }
+      });
+      html = docClone.documentElement.outerHTML;
+    }
+  }
+
+  const decantOpts = options?.decantOptions || {};
+
+  const result = decantExtract({
+    html,
+    url,
+    title,
+    format: decantOpts.format || 'markdown',
+    includeImages: decantOpts.includeImages !== false,
+    detectTables: decantOpts.detectTables !== false,
+    smartExtract: decantOpts.smartExtract !== false,
+    fullPage: selection ? true : (decantOpts.fullPage === true)
+  });
+
+  return {
+    content: result.output,
+    originalLength: html.length,
+    truncatedLength: result.output.length,
+    algorithm: 4,
+    metadata: result.metadata
+  };
+}
+
 // ═══════════════════════════════════════════════════════
 // IFRAME DISCOVERY
 // ═══════════════════════════════════════════════════════
@@ -733,14 +807,23 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         let algorithm: ExtractionAlgorithm = 1;
         if (request.algorithm === 2) algorithm = 2;
         if (request.algorithm === 3) algorithm = 3;
+        if (request.algorithm === 4) algorithm = 4;
 
-        extractPageContent(algorithm, { characterLimit: charLimit, promptLength })
+        extractPageContent(algorithm, { 
+            characterLimit: charLimit, 
+            promptLength,
+            decantOptions: request.decantOptions,
+            html: request.html,
+            url: request.url,
+            title: request.title
+        })
             .then(result => {
                 sendResponse({
                     success: true,
                     content: result.content,
                     originalLength: result.originalLength,
-                    truncatedLength: result.truncatedLength
+                    truncatedLength: result.truncatedLength,
+                    metadata: result.metadata
                 });
             })
             .catch(error => {
@@ -751,6 +834,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
             });
             
         return true; // Keep message channel open for async response
+    }
+
+    if (request.action === 'copyToClipboard') {
+        navigator.clipboard.writeText(request.text)
+            .then(() => sendResponse({ success: true }))
+            .catch(err => sendResponse({ success: false, error: err instanceof Error ? err.message : String(err) }));
+        return true;
     }
 
     // ── Return identity info for this frame (used by background frame resolver) ─

@@ -1,0 +1,1 @@
+(()=>{chrome.runtime.onMessage.addListener((t,c,r)=>{if(t.action==="copyToClipboard"){try{const e=document.createElement("textarea");e.value=t.text,document.body.appendChild(e),e.select(),document.execCommand("copy"),e.remove(),r({success:!0})}catch(e){r({success:!1,error:e.message})}return!0}});})();

@@ -20,6 +20,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     const iframePickerGroup = document.getElementById('iframe-picker-group');
     const iframePickerList = document.getElementById('iframe-picker-list');
 
+    // Decant DOM elements
+    const decantOptionsPanel = document.getElementById('decant-options-panel');
+    const decantFormatSelect = document.getElementById('decant-format-select');
+    const decantOptImages = document.getElementById('decant-opt-images');
+    const decantOptTables = document.getElementById('decant-opt-tables');
+    const decantOptSmart = document.getElementById('decant-opt-smart');
+    const decantOptFullpage = document.getElementById('decant-opt-fullpage');
+    const decantPickerBtn = document.getElementById('decant-picker-btn');
+    const decantTokensList = document.getElementById('decant-tokens-list');
+
     // State
     let currentTabId = null;
     let availableFrames = []; // Array<{ frameId, label, url, depth }>
@@ -34,13 +44,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Save settings on change
     promptSelect.addEventListener('change', saveCurrentSettings);
     chatbotSelect.addEventListener('change', saveCurrentSettings);
-    algorithmSelect.addEventListener('change', saveCurrentSettings);
+    algorithmSelect.addEventListener('change', () => {
+        updateDecantPanelVisibility();
+        updateTokenEstimations();
+        saveCurrentSettings();
+    });
     includePromptCheckbox.addEventListener('change', saveCurrentSettings);
     openChatbotCheckbox.addEventListener('change', saveCurrentSettings);
     iframeSourceSelect.addEventListener('change', () => {
         onIframeSourceChange();
         saveCurrentSettings();
     });
+
+    decantFormatSelect.addEventListener('change', () => { saveCurrentSettings(); updateTokenEstimations(); });
+    decantOptImages.addEventListener('change', () => { saveCurrentSettings(); updateTokenEstimations(); });
+    decantOptTables.addEventListener('change', () => { saveCurrentSettings(); updateTokenEstimations(); });
+    decantOptSmart.addEventListener('change', () => { saveCurrentSettings(); updateTokenEstimations(); });
+    decantOptFullpage.addEventListener('change', () => { saveCurrentSettings(); updateTokenEstimations(); });
+    decantPickerBtn.addEventListener('click', handleStartDomPicker);
 
     // ── Load all data and populate dropdowns ──────────────────────────────────
 
@@ -132,6 +153,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             includePromptCheckbox.checked = settings.includePrompt !== false;
             openChatbotCheckbox.checked = settings.openChatbot !== false;
             updateIncludePromptVisibility();
+
+            // Restore Decant settings
+            decantFormatSelect.value = settings.decantFormat || 'markdown';
+            decantOptImages.checked = settings.decantIncludeImages !== false;
+            decantOptTables.checked = settings.decantDetectTables !== false;
+            decantOptSmart.checked = settings.decantSmartExtract !== false;
+            decantOptFullpage.checked = settings.decantFullPage === true;
+
+            // Update panel visibility
+            updateDecantPanelVisibility();
+            updateTokenEstimations();
 
             // Discover iframes for the active tab
             if (currentTabId !== null) {
@@ -253,7 +285,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             includePrompt: includePromptCheckbox.checked,
             openChatbot: openChatbotCheckbox.checked,
             extractionAlgorithm: parseInt(algorithmSelect.value) || 1,
-            iframeSource: iframeSourceSelect.value || 'main'
+            iframeSource: iframeSourceSelect.value || 'main',
+            decantFormat: decantFormatSelect.value || 'markdown',
+            decantIncludeImages: decantOptImages.checked !== false,
+            decantDetectTables: decantOptTables.checked !== false,
+            decantSmartExtract: decantOptSmart.checked !== false,
+            decantFullPage: decantOptFullpage.checked === true
         };
         await saveSettings(settings);
     }
@@ -339,7 +376,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                             // for other tabs default to first iframe (empty = auto-first).
                             frameTargets: (tab.id === currentTabId) ? selectedFrameTargets : [],
                             characterLimit: chatbot.characterLimit || 20000,
-                            algorithm: selectedAlgorithm
+                            algorithm: selectedAlgorithm,
+                            decantOptions: {
+                                format: decantFormatSelect.value || 'markdown',
+                                includeImages: decantOptImages.checked !== false,
+                                detectTables: decantOptTables.checked !== false,
+                                smartExtract: decantOptSmart.checked !== false,
+                                fullPage: decantOptFullpage.checked === true
+                            }
                         });
                         if (response?.success) tabText = response.content;
                     } else {
@@ -350,7 +394,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                             action: 'extractContent',
                             characterLimit: chatbot.characterLimit || 20000,
                             promptLength: includePrompt && prompt ? prompt.content.length : 0,
-                            algorithm: selectedAlgorithm
+                            algorithm: selectedAlgorithm,
+                            decantOptions: {
+                                format: decantFormatSelect.value || 'markdown',
+                                includeImages: decantOptImages.checked !== false,
+                                detectTables: decantOptTables.checked !== false,
+                                smartExtract: decantOptSmart.checked !== false,
+                                fullPage: decantOptFullpage.checked === true
+                            }
                         }, { frameId: 0 });
                         if (response?.success) tabText = response.content;
                     }
@@ -403,6 +454,79 @@ document.addEventListener('DOMContentLoaded', async () => {
             showStatus(error.message || 'Extraction failed', 'error');
         } finally {
             setLoading(false);
+        }
+    }
+
+    // ── Decant helpers ────────────────────────────────────────────────────────
+
+    function updateDecantPanelVisibility() {
+        const isDecant = algorithmSelect.value === '4';
+        decantOptionsPanel.style.display = isDecant ? 'flex' : 'none';
+    }
+
+    async function updateTokenEstimations() {
+        if (algorithmSelect.value !== '4' || !currentTabId) return;
+
+        try {
+            const isFirefox = navigator.userAgent.includes('Firefox');
+            if (!isFirefox) {
+                try {
+                    await chrome.scripting.executeScript({
+                        target: { tabId: currentTabId },
+                        files: ['content/extractor.js']
+                    });
+                } catch (_) {}
+            }
+
+            const response = await chrome.tabs.sendMessage(currentTabId, {
+                action: 'extractContent',
+                algorithm: 4,
+                decantOptions: {
+                    format: decantFormatSelect.value || 'markdown',
+                    includeImages: decantOptImages.checked !== false,
+                    detectTables: decantOptTables.checked !== false,
+                    smartExtract: decantOptSmart.checked !== false,
+                    fullPage: decantOptFullpage.checked === true
+                }
+            }, { frameId: 0 });
+
+            if (response?.success && response.metadata?.tokensByModel) {
+                const tb = response.metadata.tokensByModel;
+                decantTokensList.innerHTML = `
+                    <div>Claude: ${tb.claude?.tokens?.toLocaleString() || '--'} (${tb.claude?.pctContext || 0}%)</div>
+                    <div>GPT-4o: ${tb.gpt4o?.tokens?.toLocaleString() || '--'} (${tb.gpt4o?.pctContext || 0}%)</div>
+                    <div>Gemini: ${tb.gemini?.tokens?.toLocaleString() || '--'} (${tb.gemini?.pctContext || 0}%)</div>
+                    <div>Llama: ${tb.llama?.tokens?.toLocaleString() || '--'} (${tb.llama?.pctContext || 0}%)</div>
+                `;
+            } else {
+                decantTokensList.innerHTML = `
+                    <div>Claude: --</div>
+                    <div>GPT-4o: --</div>
+                    <div>Gemini: --</div>
+                    <div>Llama: --</div>
+                `;
+            }
+        } catch (e) {
+            decantTokensList.innerHTML = `
+                <div style="grid-column: span 2; color: var(--text-tertiary);">Tokens unavailable on this page</div>
+            `;
+        }
+    }
+
+    async function handleStartDomPicker() {
+        try {
+            showStatus('Select an element on the page...', 'info');
+            const response = await chrome.runtime.sendMessage({
+                action: 'startDomPicker'
+            });
+
+            if (response?.success) {
+                window.close();
+            } else {
+                showStatus(response?.error || 'Failed to start picker', 'error');
+            }
+        } catch (e) {
+            showStatus(e.message, 'error');
         }
     }
 

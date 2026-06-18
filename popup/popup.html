@@ -83,6 +83,62 @@
                 </label>
             </div>
 
+            <!-- Decant Options Panel -->
+            <div id="decant-options-panel" style="display: none; flex-direction: column; gap: 12px; padding: 12px; background: var(--bg-secondary); border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 4px;">
+                <div style="font-size: 11px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Decant Settings</div>
+                
+                <!-- Format Toggle -->
+                <div class="form-group">
+                    <label for="decant-format-select" style="font-size: 11px;">Output Format</label>
+                    <select id="decant-format-select" class="select-input" style="padding: 6px 10px; font-size: 13px; border-radius: var(--radius-sm);">
+                        <option value="markdown">Markdown</option>
+                        <option value="json">JSON</option>
+                        <option value="mcp">MCP (Model Context Protocol)</option>
+                    </select>
+                </div>
+
+                <!-- Checkboxes -->
+                <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                    <label class="checkbox-label" style="font-size: 12px;">
+                        <input type="checkbox" id="decant-opt-images" checked>
+                        <span class="checkmark" style="width: 16px; height: 16px;"></span>
+                        <span>Include images</span>
+                    </label>
+                    <label class="checkbox-label" style="font-size: 12px;">
+                        <input type="checkbox" id="decant-opt-tables" checked>
+                        <span class="checkmark" style="width: 16px; height: 16px;"></span>
+                        <span>Detect tables</span>
+                    </label>
+                    <label class="checkbox-label" style="font-size: 12px;">
+                        <input type="checkbox" id="decant-opt-smart" checked>
+                        <span class="checkmark" style="width: 16px; height: 16px;"></span>
+                        <span>Extract emails/dates</span>
+                    </label>
+                    <label class="checkbox-label" style="font-size: 12px;">
+                        <input type="checkbox" id="decant-opt-fullpage">
+                        <span class="checkmark" style="width: 16px; height: 16px;"></span>
+                        <span>Full page (vs Reader)</span>
+                    </label>
+                </div>
+
+                <!-- Token Estimation -->
+                <div id="decant-tokens-display" style="margin-top: 4px; padding-top: 8px; border-top: 1px solid var(--border-color); font-size: 11px; color: var(--text-secondary);">
+                    <div style="font-weight: 500; margin-bottom: 2px;">Estimated Tokens:</div>
+                    <div id="decant-tokens-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-family: monospace;">
+                        <div>Claude: --</div>
+                        <div>GPT-4o: --</div>
+                        <div>Gemini: --</div>
+                        <div>Llama: --</div>
+                    </div>
+                </div>
+
+                <!-- DOM Picker Button -->
+                <button id="decant-picker-btn" type="button" class="extract-button" style="background: var(--bg-tertiary); color: var(--text-primary); padding: 8px 12px; font-size: 13px; font-weight: 500; border-radius: var(--radius-sm); margin-top: 4px; box-shadow: none;">
+                    <span class="btn-icon">🎯</span>
+                    <span class="btn-text">Select Element (DOM Picker)</span>
+                </button>
+            </div>
+
             <!-- Extract Button -->
             <button id="extract-btn" class="extract-button">
                 <span class="btn-icon">🚀</span>

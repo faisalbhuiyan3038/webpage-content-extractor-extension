@@ -99,10 +99,8 @@ if (chrome.commands) {
 
 // Copy to clipboard helper
 async function copyToClipboard(text) {
-    // For MV3, we need to use the offscreen API or inject a script
     try {
-        // Try using clipboard API via offscreen document (Chrome 109+)
-        if (chrome.offscreen) {
+        if (chrome.offscreen && typeof chrome.offscreen.createDocument === 'function') {
             await chrome.offscreen.createDocument({
                 url: 'offscreen.html',
                 reasons: ['CLIPBOARD'],
@@ -110,10 +108,15 @@ async function copyToClipboard(text) {
             });
             await chrome.runtime.sendMessage({ action: 'copyToClipboard', text });
             await chrome.offscreen.closeDocument();
+        } else {
+            // Fallback for Firefox and other browsers without offscreen
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (tab) {
+                await chrome.tabs.sendMessage(tab.id, { action: 'copyToClipboard', text });
+            }
         }
     } catch (e) {
-        // Fallback: handled in popup
-        console.log('Clipboard operation will be handled by popup');
+        console.warn('Clipboard operation failed:', e);
     }
 }
 
@@ -128,9 +131,9 @@ async function copyToClipboard(text) {
  * cannot send chrome.runtime.sendMessage to itself, so we must NOT route
  * through the message listener.
  */
-async function doExtractFromFrames({ tabId, iframeSource, frameTargets, characterLimit, algorithm }) {
+async function doExtractFromFrames({ tabId, iframeSource, frameTargets, characterLimit, algorithm, decantOptions }) {
     const results = [];
-    const msgOpts = { action: 'extractContent', characterLimit, promptLength: 0, algorithm };
+    const msgOpts = { action: 'extractContent', characterLimit, promptLength: 0, algorithm, decantOptions };
 
     // ── Main frame (frameId 0) ────────────────────────────────────────────────
     if (iframeSource === 'main' || iframeSource === 'both') {
@@ -389,13 +392,69 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         // Thin handler — delegates to the shared doExtractFromFrames helper.
         // Keeping logic in a standalone function avoids the service-worker
         // self-messaging anti-pattern used by extractFromTabs.
-        const { tabId, iframeSource, frameTargets, characterLimit, algorithm } = request;
-        doExtractFromFrames({ tabId, iframeSource, frameTargets, characterLimit, algorithm })
+        const { tabId, iframeSource, frameTargets, characterLimit, algorithm, decantOptions } = request;
+        doExtractFromFrames({ tabId, iframeSource, frameTargets, characterLimit, algorithm, decantOptions })
             .then(result => sendResponse(result))
             .catch(err => {
                 console.error('[WCE] extractFromFrames error:', err);
                 sendResponse({ success: false, error: String(err) });
             });
+        return true;
+    } else if (request.action === 'startDomPicker') {
+        (async () => {
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tab) throw new Error('No active tab');
+                await chrome.scripting.executeScript({
+                    target: { tabId: tab.id },
+                    files: ['content/dom-picker.js']
+                });
+                sendResponse({ success: true });
+            } catch (e) {
+                console.error('[WCE] DOM Picker injection failed:', e);
+                sendResponse({ success: false, error: e.message });
+            }
+        })();
+        return true;
+    } else if (request.action === 'pickerResult') {
+        (async () => {
+            try {
+                const { html, url, title, domain } = request.data;
+                const result = await chrome.storage.sync.get(['settings']);
+                const settings = result.settings || {};
+
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tab) throw new Error('No active tab');
+
+                const response = await chrome.tabs.sendMessage(tab.id, {
+                    action: 'extractContent',
+                    algorithm: 4,
+                    html,
+                    url,
+                    title,
+                    decantOptions: {
+                        format: settings.decantFormat || 'markdown',
+                        includeImages: settings.decantIncludeImages !== false,
+                        detectTables: settings.decantDetectTables !== false,
+                        smartExtract: settings.decantSmartExtract !== false,
+                        fullPage: true
+                    }
+                }, { frameId: 0 });
+
+                if (response?.success) {
+                    await copyToClipboard(response.content);
+                    sendResponse({ success: true, result: response });
+                } else {
+                    throw new Error(response?.error || 'Extraction failed');
+                }
+            } catch (e) {
+                console.error('[WCE] Picker extraction failed:', e);
+                sendResponse({ success: false, error: e.message });
+            }
+        })();
+        return true;
+    } else if (request.action === 'pickerCancelled') {
+        sendResponse({ success: true });
         return true;
     }
     return true;
